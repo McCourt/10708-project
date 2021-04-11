@@ -17,6 +17,6 @@ class MyModel(nn.Module):
         # includes output, info for visualization, etc.
         return output_dict
         
-    def train(self, dataset, optimizer, scheduler):
+    def update(self, batch, optimizer, logger):
         # train model
 ```
