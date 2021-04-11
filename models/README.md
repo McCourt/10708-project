@@ -16,4 +16,7 @@ class MyModel(nn.Module):
         
         # includes output, info for visualization, etc.
         return output_dict
+        
+    def train(self, dataset):
+        # train model
 ```
