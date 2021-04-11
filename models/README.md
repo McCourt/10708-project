@@ -12,6 +12,7 @@ class MyModel(nn.Module):
         output_dict = {}
         generated_images = ...
         output_dict['output_image'] = generated_images
+        output_dict['loss'] = loss
         
         # includes output, info for visualization, etc.
         return output_dict
