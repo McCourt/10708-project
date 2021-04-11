@@ -1,9 +1,9 @@
 # Model API
 
-```
+```python
 class MyModel(nn.Module):
     def __init__(self, config): # config is a dict
-        self.xxx =xxx
+        self.xxx = xxx
 
     def forward(self, batch):
         x = batch['images']
