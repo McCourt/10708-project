@@ -1,18 +1,14 @@
 import argparse
+import importlib
+from collections import defaultdict
+
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from torch import optim
-import torchvision
 from torchvision import transforms, datasets
-import pandas as pd
-import numpy as np
-import importlib
 from tqdm import tqdm
-from collections import defaultdict
-
-
-transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178)])
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
@@ -22,6 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=1e04, help='Learning Rate')
     args = parser.parse_args()
 
+    transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
     test_data = datasets.CelebA('./data', split='test', download=True, transform=transform_fn)
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
@@ -43,7 +40,7 @@ if __name__ == '__main__':
         model = module.CVAE()
         model.to(device)
         bce_fn = nn.BCELoss()
-        loss_fn = lambda y, y_hat, mu, logvar: bce_fn(y_hat, y) -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        loss_fn = lambda y, y_hat, mu, logvar: bce_fn(y_hat, y) - 0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     elif args.model == 'bvgan':
         # TODO: Add model specification and optimizer of BVGAN
@@ -88,3 +85,4 @@ if __name__ == '__main__':
             pbar.set_description(''.join(['[{}:{:.4f}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
     pbar.close()
+    pd.DataFrame.from_dict(loss_dic).to_csv('{}_log.csv'.format(args.model))
