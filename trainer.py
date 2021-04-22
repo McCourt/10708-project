@@ -28,11 +28,11 @@ if __name__ == '__main__':
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = importlib.import_module('model.{}'.format(args.model))
+    module = importlib.import_module('model.{}'.format(args.model))
 
     if args.model == 'cgan':
-        discriminator = model.DiscriminatorModel()
-        generator = model.GeneratorModel()
+        discriminator = module.DiscriminatorModel()
+        generator = module.GeneratorModel()
         discriminator.to(device)
         generator.to(device)
 
@@ -40,8 +40,11 @@ if __name__ == '__main__':
         doptimizer = optim.Adam(discriminator.parameters(), lr=args.learning_rate)
         goptimizer = optim.Adam(generator.parameters(), lr=args.learning_rate)
     elif args.model == 'cvae':
-        # TODO: Add model specification and optimizer of CVAE
-        pass
+        model = module.CVAE()
+        model.to(device)
+        bce_fn = nn.BCELoss()
+        loss_fn = lambda y, y_hat, mu, logvar: bce_fn(y_hat, y) -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     elif args.model == 'bvgan':
         # TODO: Add model specification and optimizer of BVGAN
         pass
@@ -63,7 +66,7 @@ if __name__ == '__main__':
                 dloss = loss_fn(dr, torch.ones(dr.size())) + loss_fn(df, torch.zeros(df.size()))
                 dloss.backward()
                 doptimizer.step()
-                loss_dic['dloss'].append(dloss.data.item())
+                loss_dic['cgan_dloss'].append(dloss.data.item())
 
                 goptimizer.zero_grad()
                 g = generator(data_dic['noises'], data_dic['fake_labels']) # batch_size X 784
@@ -71,10 +74,14 @@ if __name__ == '__main__':
                 gloss = loss_fn(df, torch.zeros(df.size()))
                 gloss.backward()
                 goptimizer.step()
-                loss_dic['gloss'].append(gloss.data.item())
+                loss_dic['cgan_gloss'].append(gloss.data.item())
             elif args.model == 'cvae':
-                # TODO: Add training loop of CVAE
-                pass
+                optimizer.zero_grad()
+                y_hat, mu, logvar = model(data_dic['images'])
+                loss = loss_fn(data_dic['images'], y_hat, mu, logvar)
+                loss.backward()
+                optimizer.step()
+                loss_dic['cvae_loss'].append(loss.data.item())
             elif args.model == 'bvgan':
                 # TODO: Add training loop of BVGAN
                 pass
