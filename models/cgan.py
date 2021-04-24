@@ -28,7 +28,7 @@ class GeneratorModel(nn.Module):
             nn.Conv2d(in_channels=64, out_channels=self.hidden_size, kernel_size=8, padding=0, bias=True),
             nn.Flatten(), # batch x 60,
             nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=self.hidden_size, out_features=self.hidden_size, bias=True),
+            nn.Linear(in_features=self.hidden_size, out_features=self.hidden_size, bias=True)
         )
 
         self.decoder = nn.Sequential(
@@ -58,46 +58,43 @@ class GeneratorModel(nn.Module):
         )
     
     def forward(self, x, labels):
-        return self.decoder(torch.cat([self.encoder(x), labels]))
+        return self.decoder(torch.cat([self.encoder(x), labels], dim=-1))
     
 
 class DiscriminatorModel(nn.Module):
-    def __init__(self, h, w, c, feature_size):
+    def __init__(self, hidden_size=60, feature_size=40):
         super(DiscriminatorModel, self).__init__()
-        image_size = 784
-        feature_size = 10
-        input_dim = image_size + feature_size
-        output_dim = 1
-        self.label_embedding = nn.Embedding(10, 10)
-        
-        self.hidden_layer1 = nn.Sequential(
-            nn.Linear(input_dim, 1024),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(0.3)
+        self.hidden_size = hidden_size
+        self.feature_size = feature_size
+        total_size = self.hidden_size + self.feature_size
+        self.D = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.BatchNorm2d(num_features=16),
+            nn.MaxPool2d(kernel_size=2), # batch x 16 x 32 x 32
+
+            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.BatchNorm2d(num_features=32),
+            nn.MaxPool2d(kernel_size=2), # batch x 32 x 16 x 16
+
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.BatchNorm2d(num_features=64),
+            nn.MaxPool2d(kernel_size=2), # batch x 64 x 8 x 8
+            nn.Conv2d(in_channels=64, out_channels=self.hidden_size, kernel_size=8, padding=0, bias=True),
+            nn.Flatten(), # batch x 60,
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(in_features=self.hidden_size, out_features=self.hidden_size, bias=True)
         )
-        self.hidden_layer2 = nn.Sequential(
-            nn.Linear(1024, 512),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(0.3)
-        )
-        self.hidden_layer3 = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(0.3)
-        )
-        self.output_layer = nn.Sequential(
-            nn.Linear(256, output_dim),
-            nn.Sigmoid()
+        self.D_linear = nn.Sequential(
+            nn.Linear(in_features=total_size, out_features=total_size * 2, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(in_features=total_size, out_features=total_size + 1, bias=True)
         )
     
     def forward(self, x, labels):
-        c = self.label_embedding(labels)
-        x = torch.cat([x, c], 1)
-        output = self.hidden_layer1(x)
-        output = self.hidden_layer2(output)
-        output = self.hidden_layer3(output)
-        output = self.output_layer(output)
-        return output.to(device)
+        return self.D_linear(torch.cat([self.D(x), labels], dim=-1))
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
