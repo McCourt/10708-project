@@ -58,7 +58,7 @@ class GeneratorModel(nn.Module):
         )
     
     def forward(self, x, labels):
-        return self.decoder(torch.cat([self.encoder(x), labels], dim=-1))
+        return x + self.decoder(torch.cat([self.encoder(x), labels], dim=-1))
     
 
 class DiscriminatorModel(nn.Module):
@@ -90,7 +90,7 @@ class DiscriminatorModel(nn.Module):
         self.D_linear = nn.Sequential(
             nn.Linear(in_features=total_size, out_features=total_size * 2, bias=True),
             nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=total_size * 2, out_features=1, bias=True),
+            nn.Linear(in_features=total_size * 2, out_features=feature_size, bias=True),
             nn.Sigmoid()
         )
     

@@ -60,23 +60,23 @@ if __name__ == '__main__':
         for imgs, features in train_loader:
             data_dic = {'images': imgs.to(device), 'labels': features.to(device)}
             if args.model == 'cgan':
-                data_dic['noises'] = torch.randn(imgs.size()).to(device)
+                # data_dic['noises'] = torch.randn(imgs.size()).to(device)
                 data_dic['fake_labels'] = torch.randint(0, 1, features.size()).to(device)
 
                 doptimizer.zero_grad()
                 with torch.no_grad():
-                    g = generator(data_dic['noises'], data_dic['fake_labels'])
+                    g = generator(data_dic['images'], data_dic['fake_labels'])
                 dr = discriminator(data_dic['images'], data_dic['labels'])
                 df = discriminator(g, data_dic['fake_labels'])
-                dloss = loss_fn(dr, torch.ones(dr.size())) + loss_fn(df, torch.zeros(df.size()))
+                dloss = loss_fn(dr, data_dic['labels'].float()) + loss_fn(df, (1. - data_dic['fake_labels']).float())
                 dloss.backward()
                 doptimizer.step()
                 loss_dic['cgan_dloss'].append(dloss.data.item())
 
                 goptimizer.zero_grad()
-                g = generator(data_dic['noises'], data_dic['fake_labels']) # batch_size X 784
+                g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
                 df = discriminator(g, data_dic['fake_labels'])
-                gloss = loss_fn(df, torch.ones(df.size()))
+                gloss = loss_fn(df, data_dic['fake_labels'].float())
                 gloss.backward()
                 goptimizer.step()
                 loss_dic['cgan_gloss'].append(gloss.data.item())
