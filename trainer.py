@@ -22,7 +22,7 @@ if __name__ == '__main__':
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
     test_data = datasets.CelebA('./data', split='test', download=True, transform=transform_fn)
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=4, shuffle=True)
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
