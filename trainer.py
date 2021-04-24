@@ -31,10 +31,13 @@ if __name__ == '__main__':
     if args.model == 'cgan':
         discriminator = module.DiscriminatorModel()
         generator = module.GeneratorModel()
-        if os.path.exists('cgan.pt'):
+        try:
             g, d = torch.load('cgan.pt', map_location='cpu')
             generator.load_state_dict(g)
             discriminator.load_state_dict(d)
+            print('Loading model successful.')
+        except:
+            print('Start new training.')
         discriminator.to(device)
         generator.to(device)
 
