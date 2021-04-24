@@ -58,7 +58,7 @@ if __name__ == '__main__':
     loss_dic = defaultdict(list)
     for _ in range(args.num_epoch):
         for imgs, features in train_loader:
-            data_dic = {'images': imgs.to(device), 'labels': features.to(device)}
+            data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2}
             if args.model == 'cgan':
                 # data_dic['noises'] = torch.randn(imgs.size()).to(device)
                 data_dic['fake_labels'] = torch.randint(0, 1, features.size()).to(device)
