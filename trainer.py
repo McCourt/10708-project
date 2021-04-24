@@ -1,6 +1,7 @@
 import argparse
 import importlib
 from collections import defaultdict
+import os
 
 import numpy as np
 import pandas as pd
@@ -30,6 +31,10 @@ if __name__ == '__main__':
     if args.model == 'cgan':
         discriminator = module.DiscriminatorModel()
         generator = module.GeneratorModel()
+        if os.path.exists('cgan.pt'):
+            g, d = torch.load('cgan.pt', map_location='cpu')
+            generator.load_state_dict(g)
+            discriminator.load_state_dict(d)
         discriminator.to(device)
         generator.to(device)
 
@@ -84,5 +89,7 @@ if __name__ == '__main__':
                 pass
             pbar.set_description(''.join(['[{}:{:.4f}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
+        if args.model == 'cgan':
+            torch.save([generator.state_dict(), discriminator.state_dict()], 'cgan.pt')
     pbar.close()
     pd.DataFrame.from_dict(loss_dic).to_csv('{}_log.csv'.format(args.model))
