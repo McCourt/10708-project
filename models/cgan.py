@@ -90,11 +90,14 @@ class DiscriminatorModel(nn.Module):
         self.D_linear = nn.Sequential(
             nn.Linear(in_features=total_size, out_features=total_size * 2, bias=True),
             nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=total_size, out_features=total_size + 1, bias=True)
+            nn.Linear(in_features=total_size * 2, out_features=total_size + 1, bias=True),
+            nn.Sigmoid()
         )
     
     def forward(self, x, labels):
-        return self.D_linear(torch.cat([self.D(x), labels], dim=-1))
+        d = self.D(x)
+        d = torch.cat([d, labels], dim=-1)
+        return self.D_linear(d)
 
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

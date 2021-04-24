@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--model', type=str, help='File Name for Model')
+    parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e04, help='Learning Rate')
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    module = importlib.import_module('model.{}'.format(args.model))
+    module = importlib.import_module('models.{}'.format(args.model))
 
     if args.model == 'cgan':
         discriminator = module.DiscriminatorModel()
@@ -52,8 +52,8 @@ if __name__ == '__main__':
         for imgs, features in train_loader:
             data_dic = {'images': imgs.to(device), 'labels': features.to(device)}
             if args.model == 'cgan':
-                data_dic['noises']: torch.randn(imgs.size()).to(device)
-                data_dic['fake_labels']: torch.randint(0, 1, features.size()).to(device)
+                data_dic['noises'] = torch.randn(imgs.size()).to(device)
+                data_dic['fake_labels'] = torch.randint(0, 1, features.size()).to(device)
 
                 doptimizer.zero_grad()
                 with torch.no_grad():
