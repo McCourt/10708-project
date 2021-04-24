@@ -58,7 +58,7 @@ class GeneratorModel(nn.Module):
         )
     
     def forward(self, x, labels):
-        return self.decoder(torch.cat([self.encoder(x), labels], dim=-1))
+        return x + self.decoder(torch.cat([self.encoder(x), labels], dim=-1))
     
 
 class DiscriminatorModel(nn.Module):
