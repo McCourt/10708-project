@@ -5,7 +5,7 @@ from torch import optim as optim
 
 
 class GeneratorModel(nn.Module):
-    def __init__(self):
+    def __init__(self, h, w, c, feature_size):
         super(GeneratorModel, self).__init__()
         feature_size = 10
         noise_size = 100
@@ -40,7 +40,7 @@ class GeneratorModel(nn.Module):
     
 
 class DiscriminatorModel(nn.Module):
-    def __init__(self):
+    def __init__(self, h, w, c, feature_size):
         super(DiscriminatorModel, self).__init__()
         image_size = 784
         feature_size = 10
