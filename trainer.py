@@ -18,7 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=1e04, help='Learning Rate')
     args = parser.parse_args()
 
-    transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178)])
+    transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
     test_data = datasets.CelebA('./data', split='test', download=True, transform=transform_fn)
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
