@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch Size')
-    parser.add_argument('--learning_rate', type=float, default=1e04, help='Learning Rate')
+    parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning Rate')
     args = parser.parse_args()
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
@@ -68,7 +68,7 @@ if __name__ == '__main__':
                 goptimizer.zero_grad()
                 g = generator(data_dic['noises'], data_dic['fake_labels']) # batch_size X 784
                 df = discriminator(g, data_dic['fake_labels'])
-                gloss = loss_fn(df, torch.zeros(df.size()))
+                gloss = loss_fn(df, torch.ones(df.size()))
                 gloss.backward()
                 goptimizer.step()
                 loss_dic['cgan_gloss'].append(gloss.data.item())
