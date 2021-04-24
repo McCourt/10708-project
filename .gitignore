@@ -1,3 +1,4 @@
 MNIST/
 .ipynb_checkpoints/
 /data/
+*.ipynb
