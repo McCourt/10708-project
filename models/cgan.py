@@ -58,13 +58,7 @@ class GeneratorModel(nn.Module):
         )
     
     def forward(self, x, labels):
-        c = self.label_embedding(labels)
-        x = torch.cat([x,c], 1)
-        output = self.hidden_layer1(x)
-        output = self.hidden_layer2(output)
-        output = self.hidden_layer3(output)
-        output = self.output_layer(output)
-        return output.to(device)
+        return self.decoder(torch.cat([self.encoder(x), labels]))
     
 
 class DiscriminatorModel(nn.Module):
