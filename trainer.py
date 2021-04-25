@@ -85,7 +85,7 @@ if __name__ == '__main__':
                 loss_dic['cgan_gloss'].append(gloss.data.item())
             elif args.model == 'cvae':
                 optimizer.zero_grad()
-                y_hat, mu, logvar = model(data_dic['images'])
+                y_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
                 loss = loss_fn(data_dic['images'], y_hat, mu, logvar)
                 loss.backward()
                 optimizer.step()

@@ -102,8 +102,7 @@ class DiscriminatorModel(nn.Module):
         self.D_linear = nn.Sequential(
             nn.Linear(in_features=total_size, out_features=total_size * 2, bias=True),
             nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=total_size * 2, out_features=feature_size + 1
-                      , bias=True),
+            nn.Linear(in_features=total_size * 2, out_features=feature_size + 1, bias=True),
             nn.Sigmoid()
         )
     
