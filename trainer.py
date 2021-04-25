@@ -16,7 +16,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
     parser.add_argument('--batch_size', type=int, default=512, help='Batch Size')
-    parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning Rate')
+    parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
     args = parser.parse_args()
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
@@ -59,16 +59,15 @@ if __name__ == '__main__':
     loss_dic = defaultdict(list)
     for _ in range(args.num_epoch):
         for imgs, features in train_loader:
-            data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2}
+            data_dic = {'images': imgs.to(device) * 255., 'labels': (features.to(device) + 1) / 2}
             if args.model == 'cgan':
                 # data_dic['noises'] = torch.randn(imgs.size()).to(device)
                 data_dic['fake_labels'] = torch.randint(0, 1, features.size()).to(device)
 
                 doptimizer.zero_grad()
-                with torch.no_grad():
-                    g = generator(data_dic['images'], data_dic['fake_labels'])
-                dr = discriminator(data_dic['images'], data_dic['labels'])
-                df = discriminator(g, data_dic['fake_labels'])
+                g = generator(data_dic['images'], data_dic['fake_labels'])
+                dr = discriminator(data_dic['images'])
+                df = discriminator(g)
                 r = torch.cat([data_dic['labels'], torch.ones((features.size(0), 1)).to(device)], dim=1)
                 f = torch.cat([1. - data_dic['fake_labels'], torch.zeros((features.size(0), 1)).to(device)], dim=1)
                 dloss = loss_fn(dr, r.float()) + loss_fn(df, f.float())
@@ -76,14 +75,18 @@ if __name__ == '__main__':
                 doptimizer.step()
                 loss_dic['cgan_dloss'].append(dloss.data.item())
 
-                goptimizer.zero_grad()
-                g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
-                df = discriminator(g, data_dic['fake_labels'])
-                f = torch.cat([data_dic['fake_labels'], torch.ones((features.size(0), 1)).to(device)], dim=1)
-                gloss = loss_fn(df, f.float()) + reg_fn(g, data_dic['images'])
-                gloss.backward()
-                goptimizer.step()
+                for _ in range(2):
+                    goptimizer.zero_grad()
+                    g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
+                    df = discriminator(g)
+                    f = torch.cat([data_dic['fake_labels'], torch.ones((features.size(0), 1)).to(device)], dim=1)
+                    gloss = loss_fn(df, f.float())
+                    greg = reg_fn(g, data_dic['images'])
+                    gl = gloss + 1e-4 * greg
+                    gl.backward()
+                    goptimizer.step()
                 loss_dic['cgan_gloss'].append(gloss.data.item())
+                loss_dic['cgan_greg'].append(greg.data.item())
             elif args.model == 'cvae':
                 optimizer.zero_grad()
                 y_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
