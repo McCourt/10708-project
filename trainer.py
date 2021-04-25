@@ -42,6 +42,7 @@ if __name__ == '__main__':
         generator.to(device)
 
         loss_fn = nn.BCELoss()
+        reg_fn = nn.MSELoss()
         doptimizer = optim.Adam(discriminator.parameters(), lr=args.learning_rate)
         goptimizer = optim.Adam(generator.parameters(), lr=args.learning_rate)
     elif args.model == 'cvae':
@@ -79,7 +80,7 @@ if __name__ == '__main__':
                 g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
                 df = discriminator(g, data_dic['fake_labels'])
                 f = torch.cat([data_dic['fake_labels'], torch.ones((features.size(0), 1)).to(device)], dim=1)
-                gloss = loss_fn(df, f.float())
+                gloss = loss_fn(df, f.float()) + reg_fn(g, data_dic['images'])
                 gloss.backward()
                 goptimizer.step()
                 loss_dic['cgan_gloss'].append(gloss.data.item())
