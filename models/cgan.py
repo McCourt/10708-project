@@ -34,7 +34,19 @@ class GeneratorModel(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(in_features=total_size, out_features=total_size, bias=True), # batch x 100 x 1 x 1
             nn.Unflatten(dim=1, unflattened_size=(total_size, 1, 1)),
-            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, kernel_size=8, padding=0, bias=True), # batch x 100 x 8 x 8
+            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(in_channels=total_size, out_channels=total_size, kernel_size=3, padding=1, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.BatchNorm2d(num_features=total_size), # batch x 64 x 2 x 2
+
+            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            nn.LeakyReLU(inplace=True),
+            nn.Conv2d(in_channels=total_size, out_channels=total_size, kernel_size=3, padding=1, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.BatchNorm2d(num_features=total_size), # batch x 64 x 4 x 4
+
+            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
             nn.LeakyReLU(inplace=True),
             nn.Conv2d(in_channels=total_size, out_channels=64, kernel_size=3, padding=1, bias=True),
             nn.LeakyReLU(inplace=True),
