@@ -10,12 +10,24 @@ import torch.nn as nn
 from torch import optim
 from torchvision import transforms, datasets
 from tqdm import tqdm
+from matplotlib import pyplot as plt
+
+
+def plot(imgs, rec_imgs):
+    f, axs = plt.subplots(2, 10, figsize=(20, 4))
+    axs = axs.flatten()
+    for i, (img, rec_img) in enumerate(zip(imgs, rec_imgs)):
+        axs[i].imshow(np.clip(np.round(np.moveaxis(img, 0, 2)), 0, 255).astype(np.uint8))
+        axs[i].axis('off')
+        axs[i + 10].imshow(np.clip(np.round(np.moveaxis(rec_img, 0, 2)), 0, 255).astype(np.uint8))
+        axs[i + 10].axis('off')
+    plt.savefig('vis.png')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
-    parser.add_argument('--batch_size', type=int, default=512, help='Batch Size')
+    parser.add_argument('--batch_size', type=int, default=400, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
     args = parser.parse_args()
 
@@ -58,10 +70,9 @@ if __name__ == '__main__':
     pbar = tqdm(total=args.num_epoch * len(train_loader))
     loss_dic = defaultdict(list)
     for _ in range(args.num_epoch):
-        for imgs, features in train_loader:
+        for index, (imgs, features) in enumerate(train_loader):
             data_dic = {'images': imgs.to(device) * 255., 'labels': (features.to(device) + 1) / 2}
             if args.model == 'cgan':
-                # data_dic['noises'] = torch.randn(imgs.size()).to(device)
                 data_dic['fake_labels'] = torch.randint(0, 1, features.size()).to(device)
 
                 doptimizer.zero_grad()
@@ -85,8 +96,11 @@ if __name__ == '__main__':
                     gl = gloss + 1e-4 * greg
                     gl.backward()
                     goptimizer.step()
+
                 loss_dic['cgan_gloss'].append(gloss.data.item())
                 loss_dic['cgan_greg'].append(greg.data.item())
+                if index % 500 == 0:
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10])
             elif args.model == 'cvae':
                 optimizer.zero_grad()
                 y_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
