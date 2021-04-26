@@ -44,7 +44,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
-    parser.add_argument('--batch_size', type=int, default=100, help='Batch Size')
+    parser.add_argument('--batch_size', type=int, default=200, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
     args = parser.parse_args()
 
@@ -108,7 +108,7 @@ if __name__ == '__main__':
                 out_src, _ = discriminator(x_hat)
                 d_loss_gp = gradient_penalty(out_src, x_hat, device)
 
-                loss = dloss + closs + d_loss_gp * 10
+                loss = dloss + d_loss_gp * 10 + closs
                 loss.backward()
                 doptimizer.step()
                 loss_dic['cgan_dloss'].append(dloss.data.item())
@@ -129,6 +129,7 @@ if __name__ == '__main__':
                     loss_dic['cgan_gdloss'].append(dlf.data.item())
                     loss_dic['cgan_gcloss'].append(closs.data.item())
                     loss_dic['cgan_greg'].append(reg.data.item())
+
                 if index % 50 == 0:
                     plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model)
             elif args.model == 'cvae':
@@ -141,7 +142,7 @@ if __name__ == '__main__':
             elif args.model == 'bvgan':
                 # TODO: Add training loop of BVGAN
                 pass
-            pbar.set_description(''.join(['[{}:{:.4f}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
+            pbar.set_description(''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
         if args.model == 'cgan':
             torch.save([generator.state_dict(), discriminator.state_dict()], 'cgan.pt')
