@@ -18,7 +18,6 @@ class ResidualBlock(nn.Module):
 
     def forward(self, x):
         x = self.pre(x)
-        # print(x.size(), self.main(x).size())
         return x + self.main(x)
 
 
@@ -113,7 +112,6 @@ class DiscriminatorModel(nn.Module):
     
     def forward(self, x):
         f = self.D(x)
-        # print(f.size(), self.hidden_size * 8)
         return self.l1(f), self.l2(f)
 
 
