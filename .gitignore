@@ -3,3 +3,4 @@ MNIST/
 /data/
 *.ipynb
 .vscode
+models/__pycache__
