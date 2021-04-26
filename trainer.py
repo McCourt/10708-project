@@ -25,11 +25,26 @@ def plot(imgs, rec_imgs, model):
     plt.close()
 
 
+def gradient_penalty(y, x, device):
+    """Compute gradient penalty: (L2_norm(dy/dx) - 1)**2."""
+    weight = torch.ones(y.size()).to(device)
+    dydx = torch.autograd.grad(outputs=y,
+                               inputs=x,
+                               grad_outputs=weight,
+                               retain_graph=True,
+                               create_graph=True,
+                               only_inputs=True)[0]
+
+    dydx = dydx.view(dydx.size(0), -1)
+    dydx_l2norm = torch.sqrt(torch.sum(dydx**2, dim=1))
+    return torch.mean((dydx_l2norm-1)**2)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
-    parser.add_argument('--batch_size', type=int, default=400, help='Batch Size')
+    parser.add_argument('--batch_size', type=int, default=100, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
     args = parser.parse_args()
 
@@ -88,26 +103,32 @@ if __name__ == '__main__':
                 dloss = dlr + dlf
                 closs = loss_fn(cfr, data_dic['labels'])
 
-                loss = dloss + closs
+                alpha = torch.rand(data_dic['images'].size(0), 1, 1, 1).to(device)
+                x_hat = (alpha * data_dic['images'].data + (1 - alpha) * g.data).requires_grad_(True)
+                out_src, _ = discriminator(x_hat)
+                d_loss_gp = gradient_penalty(out_src, x_hat, device)
+
+                loss = dloss + closs + d_loss_gp * 10
                 loss.backward()
                 doptimizer.step()
                 loss_dic['cgan_dloss'].append(dloss.data.item())
                 loss_dic['cgan_closs'].append(closs.data.item())
 
-                goptimizer.zero_grad()
-                g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
-                df, cff = discriminator(g)
+                if index % 5 == 0:
+                    goptimizer.zero_grad()
+                    g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
+                    df, cff = discriminator(g)
 
-                dloss = - torch.mean(df)
-                closs = loss_fn(cff, data_dic['fake_labels'])
-                reg = reg_fn(g, data_dic['images'])
-                loss = dloss + closs + 1e-4 * reg
-                loss.backward()
-                goptimizer.step()
+                    dloss = - torch.mean(df)
+                    closs = loss_fn(cff, data_dic['fake_labels'])
+                    reg = reg_fn(g, data_dic['images'])
+                    loss = dloss + closs + 10 * reg
+                    loss.backward()
+                    goptimizer.step()
 
-                loss_dic['cgan_gdloss'].append(dlf.data.item())
-                loss_dic['cgan_gcloss'].append(closs.data.item())
-                loss_dic['cgan_greg'].append(reg.data.item())
+                    loss_dic['cgan_gdloss'].append(dlf.data.item())
+                    loss_dic['cgan_gcloss'].append(closs.data.item())
+                    loss_dic['cgan_greg'].append(reg.data.item())
                 if index % 50 == 0:
                     plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model)
             elif args.model == 'cvae':
