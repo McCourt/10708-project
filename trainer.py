@@ -16,7 +16,7 @@ from matplotlib import pyplot as plt
 def plot(imgs, rec_imgs):
     f, axs = plt.subplots(2, 10, figsize=(20, 4))
     axs = axs.flatten()
-    for i, (img, rec_img) in enumerate(zip(imgs, rec_imgs)):
+    for i, (img, rec_img) in enumerate(zip(imgs * 255., rec_imgs * 255.)):
         axs[i].imshow(np.clip(np.round(np.moveaxis(img, 0, 2)), 0, 255).astype(np.uint8))
         axs[i].axis('off')
         axs[i + 10].imshow(np.clip(np.round(np.moveaxis(rec_img, 0, 2)), 0, 255).astype(np.uint8))
@@ -80,31 +80,36 @@ if __name__ == '__main__':
 
                 doptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels'])
-                dr = discriminator(data_dic['images'])
-                df = discriminator(g)
-                r = torch.cat([data_dic['labels'], torch.ones((features.size(0), 1)).to(device)], dim=1)
-                f = torch.cat([1. - data_dic['fake_labels'], torch.zeros((features.size(0), 1)).to(device)], dim=1)
-                dlr = loss_fn(dr, r.float())
-                dlf = loss_fn(df, f.float())
+                dr, cfr = discriminator(data_dic['images'])
+                df, _ = discriminator(g)
+
+                dlr = - torch.mean(dr)
+                dlf = torch.mean(df)
                 dloss = dlr + dlf
-                dloss.backward()
+                closs = loss_fn(cfr, data_dic['labels'])
+
+                loss = dloss + closs
+                loss.backward()
                 doptimizer.step()
                 loss_dic['cgan_dloss_real'].append(dlr.data.item())
                 loss_dic['cgan_dloss_fake'].append(dlf.data.item())
+                loss_dic['cgan_closs'].append(closs.data.item())
 
                 goptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
-                df = discriminator(g)
-                f = torch.cat([data_dic['fake_labels'], torch.ones((features.size(0), 1)).to(device)], dim=1)
-                gloss = loss_fn(df, f.float())
-                greg = reg_fn(g, data_dic['images'])
-                gl = gloss # + 1e-4 * greg
-                gl.backward()
+                df, cfr = discriminator(g)
+
+                dlf = - torch.mean(df)
+                closs = loss_fn(g, data_dic['fake_labels'])
+                reg = reg_fn(g, data_dic['images'])
+                loss = dlf + closs + 1e-4 * reg
+                loss.backward()
                 goptimizer.step()
 
-                loss_dic['cgan_gloss'].append(gloss.data.item())
-                loss_dic['cgan_greg'].append(greg.data.item())
-                plot(data_dic['images'].detach().cpu().numpy()[:10] * 255., g.detach().cpu().numpy()[:10] * 255.)
+                loss_dic['cgan_gloss'].append(dlf.data.item())
+                loss_dic['cgan_gcloss'].append(closs.data.item())
+                loss_dic['cgan_greg'].append(reg.data.item())
+                plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10])
             elif args.model == 'cvae':
                 optimizer.zero_grad()
                 y_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
