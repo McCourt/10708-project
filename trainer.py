@@ -22,6 +22,8 @@ def plot(imgs, rec_imgs):
         axs[i + 10].imshow(np.clip(np.round(np.moveaxis(rec_img, 0, 2)), 0, 255).astype(np.uint8))
         axs[i + 10].axis('off')
     plt.savefig('vis.png')
+    plt.close()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
@@ -33,6 +35,7 @@ if __name__ == '__main__':
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
+    train_data = torch.utils.data.Subset(train_data, [i for i in range(10)])
     # test_data = datasets.CelebA('./data', split='test', download=True, transform=transform_fn)
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=4, shuffle=True)
     # test_loader = torch.utils.data.DataLoader(test_data, batch_size=1)
@@ -71,7 +74,7 @@ if __name__ == '__main__':
     loss_dic = defaultdict(list)
     for _ in range(args.num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
-            data_dic = {'images': imgs.to(device) * 255., 'labels': (features.to(device) + 1) / 2}
+            data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2}
             if args.model == 'cgan':
                 data_dic['fake_labels'] = torch.randint(0, 1, features.size()).to(device)
 
@@ -81,26 +84,27 @@ if __name__ == '__main__':
                 df = discriminator(g)
                 r = torch.cat([data_dic['labels'], torch.ones((features.size(0), 1)).to(device)], dim=1)
                 f = torch.cat([1. - data_dic['fake_labels'], torch.zeros((features.size(0), 1)).to(device)], dim=1)
-                dloss = loss_fn(dr, r.float()) + loss_fn(df, f.float())
+                dlr = loss_fn(dr, r.float())
+                dlf = loss_fn(df, f.float())
+                dloss = dlr + dlf
                 dloss.backward()
                 doptimizer.step()
-                loss_dic['cgan_dloss'].append(dloss.data.item())
+                loss_dic['cgan_dloss_real'].append(dlr.data.item())
+                loss_dic['cgan_dloss_fake'].append(dlf.data.item())
 
-                for _ in range(2):
-                    goptimizer.zero_grad()
-                    g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
-                    df = discriminator(g)
-                    f = torch.cat([data_dic['fake_labels'], torch.ones((features.size(0), 1)).to(device)], dim=1)
-                    gloss = loss_fn(df, f.float())
-                    greg = reg_fn(g, data_dic['images'])
-                    gl = gloss + 1e-4 * greg
-                    gl.backward()
-                    goptimizer.step()
+                goptimizer.zero_grad()
+                g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
+                df = discriminator(g)
+                f = torch.cat([data_dic['fake_labels'], torch.ones((features.size(0), 1)).to(device)], dim=1)
+                gloss = loss_fn(df, f.float())
+                greg = reg_fn(g, data_dic['images'])
+                gl = gloss # + 1e-4 * greg
+                gl.backward()
+                goptimizer.step()
 
                 loss_dic['cgan_gloss'].append(gloss.data.item())
                 loss_dic['cgan_greg'].append(greg.data.item())
-                if index % 500 == 0:
-                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10])
+                plot(data_dic['images'].detach().cpu().numpy()[:10] * 255., g.detach().cpu().numpy()[:10] * 255.)
             elif args.model == 'cvae':
                 optimizer.zero_grad()
                 y_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
