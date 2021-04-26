@@ -110,14 +110,12 @@ class DiscriminatorModel(nn.Module):
         )
 
         self.l1 = nn.Sequential(
-            nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=self.hidden_size, out_features=2 * self.hidden_size, bias=True),
             nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=2 * self.hidden_size, out_features=1, bias=True)
         )
 
         self.l2 = nn.Sequential(
-            nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=self.hidden_size, out_features=2 * self.hidden_size, bias=True),
             nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=2 * self.hidden_size, out_features=self.feature_size, bias=True),

@@ -13,15 +13,15 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 
 
-def plot(imgs, rec_imgs):
+def plot(imgs, rec_imgs, model):
     f, axs = plt.subplots(2, 10, figsize=(20, 4))
     axs = axs.flatten()
-    for i, (img, rec_img) in enumerate(zip(imgs * 255., rec_imgs * 255.)):
-        axs[i].imshow(np.clip(np.round(np.moveaxis(img, 0, 2)), 0, 255).astype(np.uint8))
+    for i, (img, rec_img) in enumerate(zip(imgs, rec_imgs)):
+        axs[i].imshow(np.moveaxis(img, 0, 2))
         axs[i].axis('off')
-        axs[i + 10].imshow(np.clip(np.round(np.moveaxis(rec_img, 0, 2)), 0, 255).astype(np.uint8))
+        axs[i + 10].imshow(np.moveaxis(rec_img, 0, 2))
         axs[i + 10].axis('off')
-    plt.savefig('vis.png')
+    plt.savefig('vis_{}.png'.format(model))
     plt.close()
 
 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
-    train_data = torch.utils.data.Subset(train_data, [i for i in range(10)])
+    # train_data = torch.utils.data.Subset(train_data, [i for i in range(10)])
     # test_data = datasets.CelebA('./data', split='test', download=True, transform=transform_fn)
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=4, shuffle=True)
     # test_loader = torch.utils.data.DataLoader(test_data, batch_size=1)
@@ -76,7 +76,7 @@ if __name__ == '__main__':
         for index, (imgs, features) in enumerate(train_loader):
             data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2}
             if args.model == 'cgan':
-                data_dic['fake_labels'] = torch.randint(0, 1, features.size()).to(device)
+                data_dic['fake_labels'] = torch.randint(0, 1, features.size()).float().to(device)
 
                 doptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels'])
@@ -91,25 +91,25 @@ if __name__ == '__main__':
                 loss = dloss + closs
                 loss.backward()
                 doptimizer.step()
-                loss_dic['cgan_dloss_real'].append(dlr.data.item())
-                loss_dic['cgan_dloss_fake'].append(dlf.data.item())
+                loss_dic['cgan_dloss'].append(dloss.data.item())
                 loss_dic['cgan_closs'].append(closs.data.item())
 
                 goptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
-                df, cfr = discriminator(g)
+                df, cff = discriminator(g)
 
-                dlf = - torch.mean(df)
-                closs = loss_fn(g, data_dic['fake_labels'])
+                dloss = - torch.mean(df)
+                closs = loss_fn(cff, data_dic['fake_labels'])
                 reg = reg_fn(g, data_dic['images'])
-                loss = dlf + closs + 1e-4 * reg
+                loss = dloss + closs + 1e-4 * reg
                 loss.backward()
                 goptimizer.step()
 
-                loss_dic['cgan_gloss'].append(dlf.data.item())
+                loss_dic['cgan_gdloss'].append(dlf.data.item())
                 loss_dic['cgan_gcloss'].append(closs.data.item())
                 loss_dic['cgan_greg'].append(reg.data.item())
-                plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10])
+                if index % 50 == 0:
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model)
             elif args.model == 'cvae':
                 optimizer.zero_grad()
                 y_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
