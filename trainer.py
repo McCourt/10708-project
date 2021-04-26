@@ -76,11 +76,14 @@ if __name__ == '__main__':
         doptimizer = optim.Adam(discriminator.parameters(), lr=args.learning_rate)
         goptimizer = optim.Adam(generator.parameters(), lr=args.learning_rate)
     elif args.model == 'cvae':
-        model = module.CVAE()
+        model = module.CVAE(device)
+        classifier = model.ClassifierModel()
         model.to(device)
+        classifier.to(device)
         bce_fn = nn.BCELoss()
         loss_fn = lambda y, y_hat, mu, logvar: bce_fn(y_hat, y) - 0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+        coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'bvgan':
         # TODO: Add model specification and optimizer of BVGAN
         pass
@@ -133,9 +136,18 @@ if __name__ == '__main__':
                 if index % 50 == 0:
                     plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model)
             elif args.model == 'cvae':
+                coptimizer.zero_grad()
+                cfr = classifier(data_dic['images'])
+                closs = bce_fn(cfr, data_dic['labels'])
+                closs.backward()
+                coptimizer.step()
+
                 optimizer.zero_grad()
-                y_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
-                loss = loss_fn(data_dic['images'], y_hat, mu, logvar)
+                x_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
+                vae_loss = loss_fn(data_dic['images'], x_hat, mu, logvar)
+                cfr = classifier(x_hat)
+                closs = bce_fn(cfr, data_dic['labels'])
+                loss = vae_loss + closs * 1
                 loss.backward()
                 optimizer.step()
                 loss_dic['cvae_loss'].append(loss.data.item())
