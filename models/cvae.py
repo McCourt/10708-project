@@ -70,7 +70,7 @@ class GeneratorModel(nn.Module):
         mu = encoder_output[..., :self.hidden_size]
         logvar = encoder_output[..., self.hidden_size:]
         eps = torch.randn(mu.shape).to(self.device)
-        sigma = 0.5 * torch.exp(logvar)
+        sigma = torch.exp(logvar / 2)
         sampled_z = mu + eps * sigma
         x_hat = self.decoder(torch.cat([sampled_z, labels], dim=-1))
 

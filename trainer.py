@@ -1,4 +1,5 @@
 import argparse
+from ast import parse
 import importlib
 from collections import defaultdict
 import os
@@ -13,7 +14,7 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 
 
-def plot(imgs, rec_imgs, model):
+def plot(imgs, rec_imgs, model, model_dir, expID=None, idx=None):
     f, axs = plt.subplots(2, 10, figsize=(20, 4))
     axs = axs.flatten()
     for i, (img, rec_img) in enumerate(zip(imgs, rec_imgs)):
@@ -21,7 +22,10 @@ def plot(imgs, rec_imgs, model):
         axs[i].axis('off')
         axs[i + 10].imshow(np.moveaxis(rec_img, 0, 2))
         axs[i + 10].axis('off')
-    plt.savefig('vis_{}.png'.format(model))
+    if expID is None or idx is None:
+        plt.savefig(os.path.join(model_dir, 'vis_{}.png'.format(model)))
+    else:
+        plt.savefig(os.path.join(model_dir, 'vis_{}_{}_{}.png'.format(model, expID, idx)))
     plt.close()
 
 
@@ -43,6 +47,7 @@ def gradient_penalty(y, x, device):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
+    parser.add_argument('--expID', type=str, default=None, help='Name of exp')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
     parser.add_argument('--batch_size', type=int, default=200, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
@@ -50,7 +55,7 @@ if __name__ == '__main__':
     parser.add_argument('--gp', type=float, default=10, help='weights for gradient penalty for wgan')
     parser.add_argument('--lambda_c', type=float, default=1., help='weights for classification loss')
     parser.add_argument('--n_critics', type=float, default=5, help='every n_critics we update generator of wgan')
-    parser.add_argument('--vis_every', type=float, default=50, help='every vis_every we visualize the training results')
+    parser.add_argument('--vis_every', type=int, default=50, help='every vis_every we visualize the training results')
     args = parser.parse_args()
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
@@ -62,6 +67,15 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     module = importlib.import_module('models.{}'.format(args.model))
+
+    if args.expID is None:
+        model_dir = '.'
+    else:
+        model_dir = 'exp_{}'.format(args.expID)
+        if os.path.exists(model_dir):
+            print('[WARNING] exp folder exists!!! overwriting expected!!!')
+        else:
+            os.makedirs(model_dir)
 
     if args.model == 'cgan':
         discriminator = module.DiscriminatorModel()
@@ -86,7 +100,7 @@ if __name__ == '__main__':
         model.to(device)
         classifier.to(device)
         bce_fn = nn.BCELoss()
-        loss_fn = lambda y, y_hat, mu, logvar: bce_fn(y_hat, y) - 0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        loss_fn = lambda x, x_hat, mu, logvar: bce_fn(x_hat, x) - 0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
         coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'bvgan':
@@ -95,7 +109,7 @@ if __name__ == '__main__':
 
     pbar = tqdm(total=args.num_epoch * len(train_loader))
     loss_dic = defaultdict(list)
-    for _ in range(args.num_epoch):
+    for epoch in range(args.num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
             data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2}
             if args.model == 'cgan':
@@ -139,7 +153,7 @@ if __name__ == '__main__':
                     loss_dic['greg'].append(reg.data.item())
 
                 if index % args.vis_every == 0:
-                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model)
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir)
             elif args.model == 'cvae':
                 coptimizer.zero_grad()
                 cfr = classifier(data_dic['images'])
@@ -153,16 +167,22 @@ if __name__ == '__main__':
                 vae_loss = loss_fn(data_dic['images'], x_hat, mu, logvar)
                 cfr = classifier(x_hat)
                 closs = bce_fn(cfr, data_dic['labels'])
-                loss = vae_loss + closs * 1
+                loss = vae_loss + args.lambda_c * closs
                 loss.backward()
                 optimizer.step()
                 loss_dic['cvae_loss'].append(loss.data.item())
+                
+                if index % args.vis_every == 0:
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], x_hat.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, args.num_epoch * epoch + index)
             elif args.model == 'bvgan':
                 # TODO: Add training loop of BVGAN
                 pass
-            pbar.set_description('[cgan]' + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
+            
+            pbar.set_description('[{}]'.format(args.model) + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
         if args.model == 'cgan':
             torch.save([generator.state_dict(), discriminator.state_dict()], 'cgan.pt')
+        elif args.model == 'cvae':
+            torch.save([model.state_dict(), classifier.state_dict()], os.path.join(model_dir, 'cvae_{}_{}.pt'.format(args.expID, args.num_epoch * epoch + index)))
     pbar.close()
     pd.DataFrame.from_dict(loss_dic).to_csv('{}_log.csv'.format(args.model))
