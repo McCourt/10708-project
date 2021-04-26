@@ -106,18 +106,15 @@ class DiscriminatorModel(nn.Module):
 
             nn.Conv2d(in_channels=64, out_channels=self.hidden_size, kernel_size=8, padding=0, bias=True),
             nn.Flatten(), # batch x 60,
-
         )
 
         self.l1 = nn.Sequential(
-            nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=self.hidden_size, out_features=2 * self.hidden_size, bias=True),
             nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=2 * self.hidden_size, out_features=1, bias=True)
         )
 
         self.l2 = nn.Sequential(
-            nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=self.hidden_size, out_features=2 * self.hidden_size, bias=True),
             nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=2 * self.hidden_size, out_features=self.feature_size, bias=True),

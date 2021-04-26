@@ -13,29 +13,44 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 
 
-def plot(imgs, rec_imgs):
+def plot(imgs, rec_imgs, model):
     f, axs = plt.subplots(2, 10, figsize=(20, 4))
     axs = axs.flatten()
-    for i, (img, rec_img) in enumerate(zip(imgs * 255., rec_imgs * 255.)):
-        axs[i].imshow(np.clip(np.round(np.moveaxis(img, 0, 2)), 0, 255).astype(np.uint8))
+    for i, (img, rec_img) in enumerate(zip(imgs, rec_imgs)):
+        axs[i].imshow(np.moveaxis(img, 0, 2))
         axs[i].axis('off')
-        axs[i + 10].imshow(np.clip(np.round(np.moveaxis(rec_img, 0, 2)), 0, 255).astype(np.uint8))
+        axs[i + 10].imshow(np.moveaxis(rec_img, 0, 2))
         axs[i + 10].axis('off')
-    plt.savefig('vis.png')
+    plt.savefig('vis_{}.png'.format(model))
     plt.close()
+
+
+def gradient_penalty(y, x, device):
+    """Compute gradient penalty: (L2_norm(dy/dx) - 1)**2."""
+    weight = torch.ones(y.size()).to(device)
+    dydx = torch.autograd.grad(outputs=y,
+                               inputs=x,
+                               grad_outputs=weight,
+                               retain_graph=True,
+                               create_graph=True,
+                               only_inputs=True)[0]
+
+    dydx = dydx.view(dydx.size(0), -1)
+    dydx_l2norm = torch.sqrt(torch.sum(dydx**2, dim=1))
+    return torch.mean((dydx_l2norm-1)**2)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
-    parser.add_argument('--batch_size', type=int, default=400, help='Batch Size')
+    parser.add_argument('--batch_size', type=int, default=200, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
     args = parser.parse_args()
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
-    train_data = torch.utils.data.Subset(train_data, [i for i in range(10)])
+    # train_data = torch.utils.data.Subset(train_data, [i for i in range(10)])
     # test_data = datasets.CelebA('./data', split='test', download=True, transform=transform_fn)
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=4, shuffle=True)
     # test_loader = torch.utils.data.DataLoader(test_data, batch_size=1)
@@ -76,7 +91,7 @@ if __name__ == '__main__':
         for index, (imgs, features) in enumerate(train_loader):
             data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2}
             if args.model == 'cgan':
-                data_dic['fake_labels'] = torch.randint(0, 1, features.size()).to(device)
+                data_dic['fake_labels'] = torch.randint(0, 1, features.size()).float().to(device)
 
                 doptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels'])
@@ -88,28 +103,35 @@ if __name__ == '__main__':
                 dloss = dlr + dlf
                 closs = loss_fn(cfr, data_dic['labels'])
 
-                loss = dloss + closs
+                alpha = torch.rand(data_dic['images'].size(0), 1, 1, 1).to(device)
+                x_hat = (alpha * data_dic['images'].data + (1 - alpha) * g.data).requires_grad_(True)
+                out_src, _ = discriminator(x_hat)
+                d_loss_gp = gradient_penalty(out_src, x_hat, device)
+
+                loss = dloss + d_loss_gp * 10 + closs
                 loss.backward()
                 doptimizer.step()
-                loss_dic['cgan_dloss_real'].append(dlr.data.item())
-                loss_dic['cgan_dloss_fake'].append(dlf.data.item())
+                loss_dic['cgan_dloss'].append(dloss.data.item())
                 loss_dic['cgan_closs'].append(closs.data.item())
 
-                goptimizer.zero_grad()
-                g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
-                df, cfr = discriminator(g)
+                if index % 5 == 0:
+                    goptimizer.zero_grad()
+                    g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
+                    df, cff = discriminator(g)
 
-                dlf = - torch.mean(df)
-                closs = loss_fn(g, data_dic['fake_labels'])
-                reg = reg_fn(g, data_dic['images'])
-                loss = dlf + closs + 1e-4 * reg
-                loss.backward()
-                goptimizer.step()
+                    dloss = - torch.mean(df)
+                    closs = loss_fn(cff, data_dic['fake_labels'])
+                    reg = reg_fn(g, data_dic['images'])
+                    loss = dloss + closs + 10 * reg
+                    loss.backward()
+                    goptimizer.step()
 
-                loss_dic['cgan_gloss'].append(dlf.data.item())
-                loss_dic['cgan_gcloss'].append(closs.data.item())
-                loss_dic['cgan_greg'].append(reg.data.item())
-                plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10])
+                    loss_dic['cgan_gdloss'].append(dlf.data.item())
+                    loss_dic['cgan_gcloss'].append(closs.data.item())
+                    loss_dic['cgan_greg'].append(reg.data.item())
+
+                if index % 50 == 0:
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model)
             elif args.model == 'cvae':
                 optimizer.zero_grad()
                 y_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
@@ -120,7 +142,7 @@ if __name__ == '__main__':
             elif args.model == 'bvgan':
                 # TODO: Add training loop of BVGAN
                 pass
-            pbar.set_description(''.join(['[{}:{:.4f}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
+            pbar.set_description(''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
         if args.model == 'cgan':
             torch.save([generator.state_dict(), discriminator.state_dict()], 'cgan.pt')
