@@ -46,11 +46,16 @@ if __name__ == '__main__':
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
     parser.add_argument('--batch_size', type=int, default=200, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
+    parser.add_argument('--reg', type=float, default=10, help='weights for reg term in loss')
+    parser.add_argument('--gp', type=float, default=10, help='weights for gradient penalty for wgan')
+    parser.add_argument('--lambda_c', type=float, default=1., help='weights for classification loss')
+    parser.add_argument('--n_critics', type=float, default=5, help='every n_critics we update generator of wgan')
+    parser.add_argument('--vis_every', type=float, default=50, help='every vis_every we visualize the training results')
     args = parser.parse_args()
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
-    # train_data = torch.utils.data.Subset(train_data, [i for i in range(10)])
+    # train_data = torch.utils.data.Subset(train_data, [i for i in range(100)])
     # test_data = datasets.CelebA('./data', split='test', download=True, transform=transform_fn)
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=4, shuffle=True)
     # test_loader = torch.utils.data.DataLoader(test_data, batch_size=1)
@@ -108,13 +113,13 @@ if __name__ == '__main__':
                 out_src, _ = discriminator(x_hat)
                 d_loss_gp = gradient_penalty(out_src, x_hat, device)
 
-                loss = dloss + d_loss_gp * 10 + closs
+                loss = dloss + d_loss_gp * args.gp + args.lambda_c * closs
                 loss.backward()
                 doptimizer.step()
                 loss_dic['dloss'].append(dloss.data.item())
                 loss_dic['closs'].append(closs.data.item())
 
-                if index % 5 == 0:
+                if index % args.n_critics == 0:
                     goptimizer.zero_grad()
                     g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
                     df, cff = discriminator(g)
@@ -122,7 +127,7 @@ if __name__ == '__main__':
                     dloss = - torch.mean(df)
                     closs = loss_fn(cff, data_dic['fake_labels'])
                     reg = reg_fn(g, data_dic['images'])
-                    loss = dloss + closs + 10 * reg
+                    loss = dloss + args.lambda_c * closs + args.reg * reg
                     loss.backward()
                     goptimizer.step()
 
@@ -130,7 +135,7 @@ if __name__ == '__main__':
                     loss_dic['gcloss'].append(closs.data.item())
                     loss_dic['greg'].append(reg.data.item())
 
-                if index % 50 == 0:
+                if index % args.vis_every == 0:
                     plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model)
             elif args.model == 'cvae':
                 optimizer.zero_grad()
