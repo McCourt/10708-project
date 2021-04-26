@@ -72,7 +72,7 @@ if __name__ == '__main__':
         generator.to(device)
 
         loss_fn = nn.BCELoss()
-        reg_fn = nn.MSELoss()
+        reg_fn = nn.L1Loss()
         doptimizer = optim.Adam(discriminator.parameters(), lr=args.learning_rate)
         goptimizer = optim.Adam(generator.parameters(), lr=args.learning_rate)
     elif args.model == 'cvae':
@@ -111,8 +111,8 @@ if __name__ == '__main__':
                 loss = dloss + d_loss_gp * 10 + closs
                 loss.backward()
                 doptimizer.step()
-                loss_dic['cgan_dloss'].append(dloss.data.item())
-                loss_dic['cgan_closs'].append(closs.data.item())
+                loss_dic['dloss'].append(dloss.data.item())
+                loss_dic['closs'].append(closs.data.item())
 
                 if index % 5 == 0:
                     goptimizer.zero_grad()
@@ -126,9 +126,9 @@ if __name__ == '__main__':
                     loss.backward()
                     goptimizer.step()
 
-                    loss_dic['cgan_gdloss'].append(dlf.data.item())
-                    loss_dic['cgan_gcloss'].append(closs.data.item())
-                    loss_dic['cgan_greg'].append(reg.data.item())
+                    loss_dic['gdloss'].append(dlf.data.item())
+                    loss_dic['gcloss'].append(closs.data.item())
+                    loss_dic['greg'].append(reg.data.item())
 
                 if index % 50 == 0:
                     plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model)
@@ -142,7 +142,7 @@ if __name__ == '__main__':
             elif args.model == 'bvgan':
                 # TODO: Add training loop of BVGAN
                 pass
-            pbar.set_description(''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
+            pbar.set_description('[cgan]' + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
         if args.model == 'cgan':
             torch.save([generator.state_dict(), discriminator.state_dict()], 'cgan.pt')
