@@ -81,8 +81,8 @@ if __name__ == '__main__':
         doptimizer = optim.Adam(discriminator.parameters(), lr=args.learning_rate)
         goptimizer = optim.Adam(generator.parameters(), lr=args.learning_rate)
     elif args.model == 'cvae':
-        model = module.CVAE(device)
-        classifier = model.ClassifierModel()
+        model = module.GeneratorModel(device)
+        classifier = module.ClassifierModel()
         model.to(device)
         classifier.to(device)
         bce_fn = nn.BCELoss()
@@ -146,6 +146,7 @@ if __name__ == '__main__':
                 closs = bce_fn(cfr, data_dic['labels'])
                 closs.backward()
                 coptimizer.step()
+                loss_dic['closs'].append(closs.data.item())
 
                 optimizer.zero_grad()
                 x_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
