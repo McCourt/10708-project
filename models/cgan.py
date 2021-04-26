@@ -106,7 +106,6 @@ class DiscriminatorModel(nn.Module):
 
             nn.Conv2d(in_channels=64, out_channels=self.hidden_size, kernel_size=8, padding=0, bias=True),
             nn.Flatten(), # batch x 60,
-
         )
 
         self.l1 = nn.Sequential(
