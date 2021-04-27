@@ -13,6 +13,14 @@ from torchvision import transforms, datasets
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 
+seed = 1
+os.environ['PYTHONHASHSEED'] = str(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = True
+
 
 def plot(imgs, rec_imgs, model, model_dir, expID=None, idx=None):
     f, axs = plt.subplots(2, 10, figsize=(20, 4))
