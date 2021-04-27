@@ -55,7 +55,7 @@ def gradient_penalty(y, x, device):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
-    parser.add_argument('--expID', type=str, default=None, help='Name of exp')
+    parser.add_argument('--expID', type=str, default='0', help='Name of exp')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
     parser.add_argument('--batch_size', type=int, default=200, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
@@ -161,7 +161,7 @@ if __name__ == '__main__':
                     loss_dic['greg'].append(reg.data.item())
 
                 if index % args.vis_every == 0:
-                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir)
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, args.num_epoch * epoch + index)
             elif args.model == 'cvae':
                 coptimizer.zero_grad()
                 cfr = classifier(data_dic['images'])
