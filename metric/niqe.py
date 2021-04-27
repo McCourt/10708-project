@@ -123,11 +123,11 @@ def _niqe_extract_subband_feats(mscncoefs):
     alpha3, N3, bl3, br3, lsq3, rsq3 = aggd_features(pps3)
     alpha4, N4, bl4, br4, lsq4, rsq4 = aggd_features(pps4)
     return np.array([alpha_m, (bl+br)/2.0,
-                     alpha1, N1, bl1, br1,  # (V)
-                     alpha2, N2, bl2, br2,  # (H)
-                     alpha3, N3, bl3, bl3,  # (D1)
-                     alpha4, N4, bl4, bl4,  # (D2)
-                     ])
+            alpha1, N1, bl1, br1,  # (V)
+            alpha2, N2, bl2, br2,  # (H)
+            alpha3, N3, bl3, bl3,  # (D1)
+            alpha4, N4, bl4, bl4,  # (D2)
+    ])
 
 def get_patches_train_features(img, patch_size, stride=8):
     return _get_patches_generic(img, patch_size, 1, stride)
@@ -145,7 +145,7 @@ def extract_on_patches(img, patch_size):
             patches.append(patch)
 
     patches = np.array(patches)
-
+    
     patch_features = []
     for p in patches:
         patch_features.append(_niqe_extract_subband_feats(p))
@@ -163,14 +163,15 @@ def _get_patches_generic(img, patch_size, is_train, stride):
     hoffset = (h % patch_size)
     woffset = (w % patch_size)
 
-    if hoffset > 0:
+    if hoffset > 0: 
         img = img[:-hoffset, :]
     if woffset > 0:
         img = img[:, :-woffset]
 
 
     img = img.astype(np.float32)
-    img2 = scipy.misc.imresize(img, 0.5, interp='bicubic', mode='F')
+    img2 = np.copy(img)
+    img2.resize([int(i * 0.5) for i in img.shape])#scipy.misc.imresize(img, 0.5, interp='bicubic', mode='F')
 
     mscn1, var, mu = compute_image_mscn_transform(img)
     mscn1 = mscn1.astype(np.float32)
@@ -214,3 +215,18 @@ def niqe(inputImgData):
     niqe_score = np.sqrt(np.dot(np.dot(X, pinvmat), X))
 
     return niqe_score
+
+
+if __name__ == "__main__":
+    
+    ref = np.array(Image.open('./test_imgs/bikes.bmp').convert('LA'))[:,:,0] # ref
+    dis = np.array(Image.open('./test_imgs/bikes_distorted.bmp').convert('LA'))[:,:,0] # dis
+
+    print('NIQE of ref bikes image is: %0.3f'% niqe(ref))
+    print('NIQE of dis bikes image is: %0.3f'% niqe(dis))
+
+    ref = np.array(Image.open('./test_imgs/parrots.bmp').convert('LA'))[:,:,0] # ref
+    dis = np.array(Image.open('./test_imgs/parrots_distorted.bmp').convert('LA'))[:,:,0] # dis
+    
+    print('NIQE of ref parrot image is: %0.3f'% niqe(ref))
+    print('NIQE of dis parrot image is: %0.3f'% niqe(dis))
