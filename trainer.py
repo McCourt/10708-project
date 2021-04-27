@@ -108,7 +108,7 @@ if __name__ == '__main__':
         model.to(device)
         classifier.to(device)
         bce_fn = nn.BCELoss()
-        loss_fn = lambda x, x_hat, mu, logvar: bce_fn(x_hat, x) - 0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        loss_fn = lambda x, x_hat, mu, logvar: bce_fn(x_hat, x) - 0.5 * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1), dim=0)
         optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
         coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'bvgan':
@@ -119,10 +119,8 @@ if __name__ == '__main__':
     loss_dic = defaultdict(list)
     for epoch in range(args.num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
-            data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2}
+            data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2, 'fake_labels': torch.randint(0, 1, features.size()).float().to(device)}
             if args.model == 'cgan':
-                data_dic['fake_labels'] = torch.randint(0, 1, features.size()).float().to(device)
-
                 doptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels'])
                 dr, cfr = discriminator(data_dic['images'])
@@ -171,17 +169,26 @@ if __name__ == '__main__':
                 loss_dic['closs'].append(closs.data.item())
 
                 optimizer.zero_grad()
-                x_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
+                x_hat, mu, logvar = model(data_dic['images'], data_dic['fake_labels'])
                 vae_loss = loss_fn(data_dic['images'], x_hat, mu, logvar)
                 cfr = classifier(x_hat)
-                closs = bce_fn(cfr, data_dic['labels'])
+                closs = bce_fn(cfr, data_dic['fake_labels'])
                 loss = vae_loss + args.lambda_c * closs
                 loss.backward()
                 optimizer.step()
                 loss_dic['cvae_loss'].append(loss.data.item())
                 
                 if index % args.vis_every == 0:
+                    model.eval()
                     plot(data_dic['images'].detach().cpu().numpy()[:10], x_hat.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, args.num_epoch * epoch + index)
+                    
+                    original_x = torch.cat([data_dic['images'][:1]] * 10, dim=0)
+                    fake_x_labels = data_dic['fake_labels'][:10]
+                    fake_x, _, _ = model(original_x, fake_x_labels)
+                    plot(original_x.detach().cpu().numpy(), fake_x.detach().cpu().numpy(), args.model, model_dir, args.expID + '_fake', args.num_epoch * epoch + index)
+                    
+                    model.train()
+            
             elif args.model == 'bvgan':
                 # TODO: Add training loop of BVGAN
                 pass
