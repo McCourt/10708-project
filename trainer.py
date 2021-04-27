@@ -22,7 +22,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
 
 
-def plot(imgs, rec_imgs, model, model_dir, expID=None, idx=None):
+def plot(imgs, rec_imgs, model, model_dir, expID=None, epoch=None, idx=None):
     f, axs = plt.subplots(2, 10, figsize=(20, 4))
     axs = axs.flatten()
     for i, (img, rec_img) in enumerate(zip(imgs, rec_imgs)):
@@ -30,10 +30,10 @@ def plot(imgs, rec_imgs, model, model_dir, expID=None, idx=None):
         axs[i].axis('off')
         axs[i + 10].imshow(np.moveaxis(rec_img, 0, 2))
         axs[i + 10].axis('off')
-    if expID is None or idx is None:
+    if expID is None or idx is None or epoch is None:
         plt.savefig(os.path.join(model_dir, 'vis_{}.png'.format(model)))
     else:
-        plt.savefig(os.path.join(model_dir, 'vis_{}_{}_{}.png'.format(model, expID, idx)))
+        plt.savefig(os.path.join(model_dir, 'vis_{}_{}_{}_{}.png'.format(model, expID, epoch, idx)))
     plt.close()
 
 
@@ -55,11 +55,11 @@ def gradient_penalty(y, x, device):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
-    parser.add_argument('--expID', type=str, default=None, help='Name of exp')
+    parser.add_argument('--expID', type=str, default='0000', help='Name of exp')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
-    parser.add_argument('--batch_size', type=int, default=200, help='Batch Size')
+    parser.add_argument('--batch_size', type=int, default=100, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
-    parser.add_argument('--reg', type=float, default=10, help='weights for reg term in loss')
+    parser.add_argument('--reg', type=float, default=1, help='weights for reg term in loss')
     parser.add_argument('--gp', type=float, default=10, help='weights for gradient penalty for wgan')
     parser.add_argument('--lambda_c', type=float, default=1., help='weights for classification loss')
     parser.add_argument('--n_critics', type=float, default=5, help='every n_critics we update generator of wgan')
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     loss_dic = defaultdict(list)
     for epoch in range(args.num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
-            data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2, 'fake_labels': torch.randint(0, 1, features.size()).float().to(device)}
+            data_dic = {'images': imgs.to(device), 'labels': features.float().to(device), 'fake_labels': torch.randint(0, 1, features.size()).float().to(device)}
             if args.model == 'cgan':
                 doptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels'])
@@ -159,7 +159,7 @@ if __name__ == '__main__':
                     loss_dic['greg'].append(reg.data.item())
 
                 if index % args.vis_every == 0:
-                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir)
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, epoch, index)
             elif args.model == 'cvae':
                 coptimizer.zero_grad()
                 cfr = classifier(data_dic['images'])
@@ -180,12 +180,12 @@ if __name__ == '__main__':
                 
                 if index % args.vis_every == 0:
                     model.eval()
-                    plot(data_dic['images'].detach().cpu().numpy()[:10], x_hat.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, args.num_epoch * epoch + index)
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], x_hat.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, epoch, index)
                     
                     original_x = torch.cat([data_dic['images'][:1]] * 10, dim=0)
                     fake_x_labels = data_dic['fake_labels'][:10]
                     fake_x, _, _ = model(original_x, fake_x_labels)
-                    plot(original_x.detach().cpu().numpy(), fake_x.detach().cpu().numpy(), args.model, model_dir, args.expID + '_fake', args.num_epoch * epoch + index)
+                    plot(original_x.detach().cpu().numpy(), fake_x.detach().cpu().numpy(), args.model, model_dir, args.expID + '_fake', epoch, index)
                     
                     model.train()
             
