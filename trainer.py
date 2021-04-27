@@ -67,7 +67,8 @@ if __name__ == '__main__':
     parser.add_argument('--vis_every', type=int, default=50, help='every vis_every we visualize the training results')
     args = parser.parse_args()
 
-    wandb.init(project='bvgan', entity='s21_10708_team2', config=vars(args))
+    wandb.init(project='bvgan', entity='s21_10708_team2', config=vars(args),
+               name=f'exp{args.expID}')
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
