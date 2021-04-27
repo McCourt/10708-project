@@ -89,7 +89,7 @@ if __name__ == '__main__':
         discriminator = module.DiscriminatorModel()
         generator = module.GeneratorModel()
         try:
-            g, d = torch.load('cgan.pt', map_location='cpu')
+            g, d = torch.load('ckpt/cgan.pt', map_location='cpu')
             generator.load_state_dict(g)
             discriminator.load_state_dict(d)
             print('Loading model successful.')
@@ -189,8 +189,8 @@ if __name__ == '__main__':
             pbar.set_description('[{}]'.format(args.model) + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
         if args.model == 'cgan':
-            torch.save([generator.state_dict(), discriminator.state_dict()], 'cgan.pt')
+            torch.save([generator.state_dict(), discriminator.state_dict()], 'ckpt/cgan.pt')
         elif args.model == 'cvae':
-            torch.save([model.state_dict(), classifier.state_dict()], os.path.join(model_dir, 'cvae_{}_{}.pt'.format(args.expID, args.num_epoch * epoch + index)))
+            torch.save([model.state_dict(), classifier.state_dict()], os.path.join(model_dir, 'ckpt/cvae_{}_{}.pt'.format(args.expID, args.num_epoch * epoch + index)))
     pbar.close()
     pd.DataFrame.from_dict(loss_dic).to_csv('{}_log.csv'.format(args.model))
