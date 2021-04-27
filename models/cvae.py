@@ -69,10 +69,14 @@ class GeneratorModel(nn.Module):
         encoder_output = self.encoder(x)
         mu = encoder_output[..., :self.hidden_size]
         logvar = encoder_output[..., self.hidden_size:]
-        eps = torch.randn(mu.shape).to(self.device)
         sigma = torch.exp(logvar / 2)
-        sampled_z = mu + eps * sigma
-        x_hat = self.decoder(torch.cat([sampled_z, labels], dim=-1))
+
+        if self.training:
+            eps = torch.randn_like(sigma)
+            sampled_z = mu + eps * sigma
+            x_hat = self.decoder(torch.cat([sampled_z, labels], dim=-1))
+        else:
+            x_hat = self.decoder(torch.cat([mu, labels], dim=-1))
 
         return x_hat, mu, logvar
     
