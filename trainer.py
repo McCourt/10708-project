@@ -12,6 +12,7 @@ from torch import optim
 from torchvision import transforms, datasets
 from tqdm import tqdm
 from matplotlib import pyplot as plt
+import wandb
 
 seed = 1
 os.environ['PYTHONHASHSEED'] = str(seed)
@@ -66,6 +67,8 @@ if __name__ == '__main__':
     parser.add_argument('--vis_every', type=int, default=50, help='every vis_every we visualize the training results')
     args = parser.parse_args()
 
+    wandb.init(project='bvgan', entity='s21_10708_team2', config=vars(args))
+
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
     # train_data = torch.utils.data.Subset(train_data, [i for i in range(100)])
@@ -117,6 +120,7 @@ if __name__ == '__main__':
 
     pbar = tqdm(total=args.num_epoch * len(train_loader))
     loss_dic = defaultdict(list)
+    step = 0
     for epoch in range(args.num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
             data_dic = {'images': imgs.to(device), 'labels': features.float().to(device), 'fake_labels': torch.randint(0, 1, features.size()).float().to(device)}
@@ -159,7 +163,15 @@ if __name__ == '__main__':
                     loss_dic['greg'].append(reg.data.item())
 
                 if index % args.vis_every == 0:
-                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, epoch, index)
+                    sample_input = data_dic['images'].detach().cpu().numpy()[:10]
+                    sample_pred = g.detach().cpu().numpy()[:10]
+                    plot(sample_input, sample_pred, args.model, model_dir, args.expID, epoch, index)
+
+                    vis_images = np.concatenate([
+                        np.concatenate([sample_input[i] for i in range(10)], axis=1),
+                        np.concatenate([sample_pred[i] for i in range(10)], axis=1)
+                    ], axis=0)
+                    wandb.log({'sample_rec', [wandb.Image(vis_images)]}, step=step)
             elif args.model == 'cvae':
                 coptimizer.zero_grad()
                 cfr = classifier(data_dic['images'])
@@ -177,7 +189,7 @@ if __name__ == '__main__':
                 loss.backward()
                 optimizer.step()
                 loss_dic['cvae_loss'].append(loss.data.item())
-                
+
                 if index % args.vis_every == 0:
                     model.eval()
                     plot(data_dic['images'].detach().cpu().numpy()[:10], x_hat.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, epoch, index)
@@ -195,6 +207,10 @@ if __name__ == '__main__':
             
             pbar.set_description('[{}]'.format(args.model) + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
+
+            wandb.log(loss_dic, step=step)
+            step += 1
+
         if args.model == 'cgan':
             torch.save([generator.state_dict(), discriminator.state_dict()], 'ckpt/cgan.pt')
         elif args.model == 'cvae':
