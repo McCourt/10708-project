@@ -57,8 +57,8 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
     parser.add_argument('--expID', type=str, default='0000', help='Name of exp')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
-    parser.add_argument('--batch_size', type=int, default=100, help='Batch Size')
-    parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
+    parser.add_argument('--batch_size', type=int, default=50, help='Batch Size')
+    parser.add_argument('--learning_rate', type=float, default=5e-4, help='Learning Rate')
     parser.add_argument('--reg', type=float, default=1, help='weights for reg term in loss')
     parser.add_argument('--gp', type=float, default=10, help='weights for gradient penalty for wgan')
     parser.add_argument('--lambda_c', type=float, default=1., help='weights for classification loss')
@@ -204,7 +204,7 @@ if __name__ == '__main__':
             pbar.set_description('[{}]'.format(args.model) + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
         if args.model == 'cgan':
-            torch.save([generator.state_dict(), discriminator.state_dict()], 'ckpt/cgan.pt')
+            torch.save([generator.state_dict(), discriminator.state_dict(), classifier.state_dict()], 'ckpt/cgan.pt')
         elif args.model == 'cvae':
             torch.save([model.state_dict(), classifier.state_dict()], os.path.join(model_dir, 'ckpt/cvae_{}_{}.pt'.format(args.expID, args.num_epoch * epoch + index)))
     pbar.close()
