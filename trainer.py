@@ -88,20 +88,24 @@ if __name__ == '__main__':
     if args.model == 'cgan':
         discriminator = module.DiscriminatorModel()
         generator = module.GeneratorModel()
+        classifier = module.ClassifierModel()
         try:
-            g, d = torch.load('ckpt/cgan.pt', map_location='cpu')
+            g, d, c = torch.load('ckpt/cgan.pt', map_location='cpu')
             generator.load_state_dict(g)
             discriminator.load_state_dict(d)
+            classifier.load_state_dict(c)
             print('Loading model successful.')
         except:
             print('Start new training.')
         discriminator.to(device)
         generator.to(device)
+        classifier.to(device)
 
         loss_fn = nn.BCELoss()
         reg_fn = nn.L1Loss()
         doptimizer = optim.Adam(discriminator.parameters(), lr=args.learning_rate)
         goptimizer = optim.Adam(generator.parameters(), lr=args.learning_rate)
+        coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'cvae':
         model = module.GeneratorModel(device)
         classifier = module.ClassifierModel()
@@ -122,9 +126,11 @@ if __name__ == '__main__':
             data_dic = {'images': imgs.to(device), 'labels': features.float().to(device), 'fake_labels': torch.randint(0, 1, features.size()).float().to(device)}
             if args.model == 'cgan':
                 doptimizer.zero_grad()
+                coptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels'])
-                dr, cfr = discriminator(data_dic['images'])
-                df, _ = discriminator(g)
+                dr = discriminator(data_dic['images'])
+                cfr = classifier(data_dic['images'])
+                df = discriminator(g)
 
                 dlr = - torch.mean(dr)
                 dlf = torch.mean(df)
@@ -133,19 +139,21 @@ if __name__ == '__main__':
 
                 alpha = torch.rand(data_dic['images'].size(0), 1, 1, 1).to(device)
                 x_hat = (alpha * data_dic['images'].data + (1 - alpha) * g.data).requires_grad_(True)
-                out_src, _ = discriminator(x_hat)
+                out_src = discriminator(x_hat)
                 d_loss_gp = gradient_penalty(out_src, x_hat, device)
 
                 loss = dloss + d_loss_gp * args.gp + args.lambda_c * closs
                 loss.backward()
                 doptimizer.step()
+                coptimizer.step()
                 loss_dic['dloss'].append(dloss.data.item())
                 loss_dic['closs'].append(closs.data.item())
 
                 if index % args.n_critics == 0:
                     goptimizer.zero_grad()
                     g = generator(data_dic['images'], data_dic['fake_labels']) # batch_size X 784
-                    df, cff = discriminator(g)
+                    df = discriminator(g)
+                    cff = classifier(g)
 
                     dloss = - torch.mean(df)
                     closs = loss_fn(cff, data_dic['fake_labels'])
