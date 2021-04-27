@@ -22,7 +22,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
 
 
-def plot(imgs, rec_imgs, model, model_dir, expID=None, idx=None):
+def plot(imgs, rec_imgs, model, model_dir, expID=None, epoch=None, idx=None):
     f, axs = plt.subplots(2, 10, figsize=(20, 4))
     axs = axs.flatten()
     for i, (img, rec_img) in enumerate(zip(imgs, rec_imgs)):
@@ -30,10 +30,10 @@ def plot(imgs, rec_imgs, model, model_dir, expID=None, idx=None):
         axs[i].axis('off')
         axs[i + 10].imshow(np.moveaxis(rec_img, 0, 2))
         axs[i + 10].axis('off')
-    if expID is None or idx is None:
+    if expID is None or idx is None or epoch is None:
         plt.savefig(os.path.join(model_dir, 'vis_{}.png'.format(model)))
     else:
-        plt.savefig(os.path.join(model_dir, 'vis_{}_{}_{}.png'.format(model, expID, idx)))
+        plt.savefig(os.path.join(model_dir, 'vis_{}_{}_{}.png'.format(model, epoch, idx)))
     plt.close()
 
 
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     loss_dic = defaultdict(list)
     for epoch in range(args.num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
-            data_dic = {'images': imgs.to(device), 'labels': (features.to(device) + 1) / 2}
+            data_dic = {'images': imgs.to(device), 'labels': features.float().to(device)}
             if args.model == 'cgan':
                 data_dic['fake_labels'] = torch.randint(0, 1, features.size()).float().to(device)
 
@@ -161,7 +161,7 @@ if __name__ == '__main__':
                     loss_dic['greg'].append(reg.data.item())
 
                 if index % args.vis_every == 0:
-                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, args.num_epoch * epoch + index)
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, epoch, index)
             elif args.model == 'cvae':
                 coptimizer.zero_grad()
                 cfr = classifier(data_dic['images'])

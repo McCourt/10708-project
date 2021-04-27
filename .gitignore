@@ -4,3 +4,8 @@ MNIST/
 *.ipynb
 .vscode
 models/__pycache__
+/exp_0/
+/vis/
+*.pt
+*.csv
+/ckpt/
