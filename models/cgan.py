@@ -65,10 +65,11 @@ class GeneratorModel(nn.Module):
             nn.Conv2d(in_channels=16, out_channels=3, kernel_size=3, padding=1, bias=True),
             nn.Sigmoid()
         )
+        self.out = nn.Sigmoid()
     
     def forward(self, x, labels):
         f = torch.cat([self.encoder(x), labels], dim=-1)
-        return self.decoder(f)
+        return self.out(self.decoder(f))
     
 
 class DiscriminatorModel(nn.Module):
@@ -76,7 +77,7 @@ class DiscriminatorModel(nn.Module):
         super(DiscriminatorModel, self).__init__()
         self.hidden_size = hidden_size
         self.feature_size = feature_size
-        self.D = nn.Sequential(
+        self.F = nn.Sequential(
             ResidualBlock(in_channels=3, out_channels=16),
             ResidualBlock(in_channels=16, out_channels=16),
             nn.MaxPool2d(kernel_size=2), # batch x 16 x 32 x 32
@@ -97,13 +98,7 @@ class DiscriminatorModel(nn.Module):
             nn.Flatten(), # batch x 60,
         )
 
-        self.l1 = nn.Sequential(
-            nn.Linear(in_features=self.hidden_size, out_features=2 * self.hidden_size, bias=True),
-            nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=2 * self.hidden_size, out_features=1, bias=True)
-        )
-
-        self.l2 = nn.Sequential(
+        self.D = nn.Sequential(
             nn.Linear(in_features=self.hidden_size, out_features=2 * self.hidden_size, bias=True),
             nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=2 * self.hidden_size, out_features=self.feature_size, bias=True),
@@ -111,8 +106,46 @@ class DiscriminatorModel(nn.Module):
         )
     
     def forward(self, x):
-        f = self.D(x)
-        return self.l1(f), self.l2(f)
+        f = self.F(x)
+        return self.D(f)
+
+
+class ClassifierModel(nn.Module):
+    def __init__(self, hidden_size=512, feature_size=40):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.feature_size = feature_size
+        self.F = nn.Sequential(
+            ResidualBlock(in_channels=3, out_channels=16),
+            ResidualBlock(in_channels=16, out_channels=16),
+            nn.MaxPool2d(kernel_size=2), # batch x 16 x 32 x 32
+
+            ResidualBlock(in_channels=16, out_channels=32),
+            ResidualBlock(in_channels=32, out_channels=32),
+            nn.MaxPool2d(kernel_size=2), # batch x 32 x 16 x 16
+
+            ResidualBlock(in_channels=32, out_channels=64),
+            ResidualBlock(in_channels=64, out_channels=64),
+            nn.MaxPool2d(kernel_size=2), # batch x 64 x 8 x 8
+
+            ResidualBlock(in_channels=64, out_channels=64),
+            ResidualBlock(in_channels=64, out_channels=64),
+            nn.MaxPool2d(kernel_size=2), # batch x 64 x 4 x 4
+
+            nn.Conv2d(in_channels=64, out_channels=self.hidden_size, kernel_size=4, bias=True),
+            nn.Flatten(), # batch x 60,
+        )
+
+        self.C = nn.Sequential(
+            nn.Linear(in_features=self.hidden_size, out_features=2 * self.hidden_size, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(in_features=2 * self.hidden_size, out_features=self.feature_size, bias=True),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        f = self.F(x)
+        return self.C(f)
 
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
