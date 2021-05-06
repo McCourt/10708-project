@@ -43,24 +43,29 @@ class GeneratorModel(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(in_features=total_size, out_features=total_size, bias=True), # batch x 100 x 1 x 1
             nn.Unflatten(dim=1, unflattened_size=(total_size, 1, 1)),
-            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
+
             ResidualBlock(in_channels=total_size, out_channels=total_size), # batch x 64 x 2 x 2
-            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
+
             ResidualBlock(in_channels=total_size, out_channels=total_size), # batch x 64 x 4 x 4
-            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
+
             ResidualBlock(in_channels=total_size, out_channels=64), # batch x 64 x 8 x 8
             nn.ConvTranspose2d(in_channels=64, out_channels=64, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
+
             ResidualBlock(in_channels=64, out_channels=32), # batch x 32 x 16 x 16
             nn.ConvTranspose2d(in_channels=32, out_channels=32, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=32, out_channels=16), # batch x 16 x 32 x 32
 
+            ResidualBlock(in_channels=32, out_channels=16), # batch x 16 x 32 x 32
             nn.ConvTranspose2d(in_channels=16, out_channels=16, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
+
             nn.Conv2d(in_channels=16, out_channels=3, kernel_size=3, padding=1, bias=True),
             nn.Sigmoid()
         )

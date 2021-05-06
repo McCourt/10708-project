@@ -6,6 +6,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import cv2
 import torch
 import torch.nn as nn
 from torch import optim
@@ -21,6 +22,20 @@ torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
+
+
+attr_names = [
+    '5_o_Clock_Shadow', 'Arched_Eyebrows', 'Attractive',
+    'Bags_Under_Eyes', 'Bald', 'Bangs', 'Big_Lips', 'Big_Nose',
+    'Black_Hair', 'Blond_Hair', 'Blurry', 'Brown_Hair',
+    'Bushy_Eyebrows', 'Chubby', 'Double_Chin', 'Eyeglasses',
+    'Goatee', 'Gray_Hair', 'Heavy_Makeup', 'High_Cheekbones', 'Male',
+    'Mouth_Slightly_Open', 'Mustache', 'Narrow_Eyes', 'No_Beard',
+    'Oval_Face', 'Pale_Skin', 'Pointy_Nose', 'Receding_Hairline',
+    'Rosy_Cheeks', 'Sideburns', 'Smiling', 'Straight_Hair', 'Wavy_Hair',
+    'Wearing_Earrings', 'Wearing_Hat', 'Wearing_Lipstick',
+    'Wearing_Necklace', 'Wearing_Necktie', 'Young'
+]
 
 
 def plot(imgs, rec_imgs, model, model_dir, expID=None, epoch=None, idx=None):
@@ -60,9 +75,13 @@ if __name__ == '__main__':
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
     parser.add_argument('--batch_size', type=int, default=100, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
+    parser.add_argument('--g_lr', type=float, default=1e-3, help='Generator Learning Rate')
+    parser.add_argument('--d_lr', type=float, default=1e-4, help='Discriminator Learning Rate')
     parser.add_argument('--reg', type=float, default=1, help='weights for reg term in loss')
     parser.add_argument('--gp', type=float, default=10, help='weights for gradient penalty for wgan')
-    parser.add_argument('--lambda_c', type=float, default=1., help='weights for classification loss')
+    parser.add_argument('--lambda_c', type=float, default=0.3, help='weights for classification loss')
+    parser.add_argument('--lambda_d', type=float, default=0.03, help='weights for discriminator loss')
+    parser.add_argument('--lambda_kl', type=float, default=0.1, help='weights for vae')
     parser.add_argument('--n_critics', type=float, default=5, help='every n_critics we update generator of wgan')
     parser.add_argument('--vis_every', type=int, default=50, help='every vis_every we visualize the training results')
     args = parser.parse_args()
@@ -116,18 +135,32 @@ if __name__ == '__main__':
         optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
         coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'bvgan':
-        # TODO: Add model specification and optimizer of BVGAN
-        pass
+        discriminator = module.DiscriminatorModel()
+        generator = module.GeneratorModel()
+        discriminator.to(device)
+        generator.to(device)
+        loss_fn = nn.BCELoss()
+        kl_loss_fn = lambda mu, std: -0.5 * (1 + torch.log(std.pow(2)) - mu.pow(2) - std.pow(2)).mean()
+        d_optim = optim.Adam(discriminator.parameters(), lr=args.d_lr)
+        g_optim = optim.Adam(generator.parameters(), lr=args.g_lr)
 
     pbar = tqdm(total=args.num_epoch * len(train_loader))
     loss_dic = defaultdict(list)
     step = 0
     for epoch in range(args.num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
-            data_dic = {'images': imgs.to(device), 'labels': features.float().to(device), 'fake_labels': torch.randint(0, 1, features.size()).float().to(device)}
+            edit_indices = np.random.randint(0, features.shape[-1], size=features.shape[0])
+            fake_labels = features.detach().cpu().numpy()
+            fake_labels[np.arange(features.shape[0]), edit_indices] = 1 - fake_labels[np.arange(features.shape[0]), edit_indices]
+            data_dic = {
+                'images': imgs.to(device),
+                'labels': features.float().to(device),
+                'fake_labels': torch.Tensor(fake_labels).float().to(device)
+            }
             if args.model == 'cgan':
                 doptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels'])
+                import pdb; pdb.set_trace()
                 dr, cfr = discriminator(data_dic['images'])
                 df, _ = discriminator(g)
 
@@ -203,10 +236,72 @@ if __name__ == '__main__':
                     model.train()
             
             elif args.model == 'bvgan':
-                # TODO: Add training loop of BVGAN
-                pass
-            
-            pbar.set_description('[{}]'.format(args.model) + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
+                loss_dic = {}
+
+                # train discriminator
+                if index % args.n_critics == 0:
+                    g, _, _ = generator(data_dic['images'], data_dic['fake_labels'])
+                    d_real_output, c_real_output = discriminator(data_dic['images'])
+                    d_fake_output, c_fake_output = discriminator(g)
+
+                    d_loss_real = -torch.log(d_real_output).mean()
+                    d_loss_fake = - torch.log(1 - d_fake_output).mean()
+                    c_loss = loss_fn(c_real_output, data_dic['labels'])
+                    d_total_loss = args.lambda_d * d_loss_real + d_loss_fake + args.lambda_c * c_loss
+
+                    d_optim.zero_grad()
+                    d_total_loss.backward()
+                    d_optim.step()
+
+                    loss_dic['dis_d_loss'] = (d_loss_real + d_loss_fake).data.item()
+                    loss_dic['dis_c_loss'] = c_loss.data.item()
+
+                # train generator
+                x_hat_fake, mu_fake, std_fake = generator(data_dic['images'], data_dic['fake_labels'])
+                x_hat_real, mu_real, std_real = generator(data_dic['images'], data_dic['labels'])
+                d_output_1, c_output_1 = discriminator(x_hat_fake)
+                d_output_2, c_output_2 = discriminator(x_hat_real)
+                d_outputs = torch.cat([d_output_1, d_output_2], dim=0)
+                vae_loss = (kl_loss_fn(mu_fake, std_fake) + kl_loss_fn(mu_real, std_real)) / 2
+                d_loss = -torch.log(d_outputs).mean()
+                c_loss = (loss_fn(c_output_1, data_dic['fake_labels']) + loss_fn(c_output_2, data_dic['labels'])) / 2
+                rec_loss = torch.mean((x_hat_real - data_dic['images']) ** 2)
+                g_total_loss = args.lambda_d * d_loss + args.lambda_c * c_loss + args.reg * rec_loss + args.lambda_kl * vae_loss
+
+                g_optim.zero_grad()
+                g_total_loss.backward()
+                g_optim.step()
+
+                loss_dic.update({
+                    'gen_d_loss': d_loss.data.item(),
+                    'gen_c_loss': c_loss.data.item(),
+                    'gen_kl_loss': vae_loss.data.item(),
+                    'gen_rec_loss': rec_loss.data.item()
+                })
+
+                if index % args.vis_every == 0:
+                    generator.eval()
+                    num_samples = 10
+                    gt_samples = data_dic['images'].detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
+                    rec_samples = x_hat_real.detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
+                    edit_samples = x_hat_fake.detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
+                    for i in range(num_samples):
+                        edit_sample = (edit_samples[i] * 255).copy().astype(np.uint8)
+                        annotated_img = cv2.putText(edit_sample,
+                                                    attr_names[edit_indices[i]],
+                                                    (10, 10), cv2.FONT_HERSHEY_SIMPLEX, 0.3,
+                                                    (255, 255, 255), 1,
+                                                    cv2.LINE_AA)
+                        edit_samples[i] = annotated_img / 255.0
+                    vis_images = np.concatenate([
+                        np.concatenate([gt_samples[i] for i in range(num_samples)], axis=1),
+                        np.concatenate([rec_samples[i] for i in range(num_samples)], axis=1),
+                        np.concatenate([edit_samples[i] for i in range(num_samples)], axis=1)
+                    ], axis=0)
+                    wandb.log({'sample_images': [wandb.Image(vis_images)]}, step=step)
+                    generator.train()
+
+            pbar.set_description(f'training: vae loss - {vae_loss.data.item()}')
             pbar.update(1)
 
             wandb.log(loss_dic, step=step)
