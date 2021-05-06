@@ -72,7 +72,7 @@ class GeneratorModel(nn.Module):
     def forward(self, x, labels):
         encoder_output = self.encoder(x)
         mu = encoder_output[..., :self.z_dim]
-        log_std = encoder_output[..., self.z_dim:]
+        log_std = encoder_output[..., self.z_dim:].clamp(-4, 15)
         std = torch.exp(log_std)
         
         if self.training:
