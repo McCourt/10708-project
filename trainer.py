@@ -70,7 +70,7 @@ if __name__ == '__main__':
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
     # train_data = torch.utils.data.Subset(train_data, [i for i in range(1000)])
     # test_data = datasets.CelebA('./data', split='test', download=True, transform=transform_fn)
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=4, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=4, shuffle=False)
     # test_loader = torch.utils.data.DataLoader(test_data, batch_size=1)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -107,13 +107,24 @@ if __name__ == '__main__':
         goptimizer = optim.Adam(generator.parameters(), lr=args.learning_rate)
         coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'cvae':
-        model = module.GeneratorModel(device)
+        model = module.GeneratorModel()
         classifier = module.ClassifierModel()
+        prior = module.PriorModel()
+
+        try:
+            m, c = torch.load('exp_test_with_true_label/cvae_test_with_true_label_2927.pt', map_location='cpu')
+            model.load_state_dict(m)
+            print('Loading model successful.')
+        except:
+            print('Start new training.')
+        
         model.to(device)
         classifier.to(device)
+        prior.to(device)
         bce_fn = nn.BCELoss()
-        loss_fn = lambda x, x_hat, mu, logvar: bce_fn(x_hat, x) - 0.5 * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1), dim=0)
-        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+        loss_fn = lambda x, x_hat, mu, logvar, mu_prior, logvar_prior: \
+            bce_fn(x_hat, x) + args.reg * 0.5 * torch.mean(torch.sum(-1 - logvar + logvar_prior + ((mu - mu_prior).pow(2) + logvar.exp()) / logvar_prior.exp(), dim=1), dim=0)
+        optimizer = optim.Adam(list(model.parameters()) + list(prior.parameters()), lr=args.learning_rate)
         coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'bvgan':
         # TODO: Add model specification and optimizer of BVGAN
@@ -180,19 +191,21 @@ if __name__ == '__main__':
                 if index % args.vis_every == 0:
                     plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, epoch, index)
             elif args.model == 'cvae':
-                coptimizer.zero_grad()
-                cfr = classifier(data_dic['images'])
-                closs = bce_fn(cfr, data_dic['labels'])
-                closs.backward()
-                coptimizer.step()
-                loss_dic['closs'].append(closs.data.item())
+                # coptimizer.zero_grad()
+                # cfr = classifier(data_dic['images'])
+                # closs = bce_fn(cfr, data_dic['labels'])
+                # closs.backward()
+                # coptimizer.step()
+                # loss_dic['closs'].append(closs.data.item())
 
                 optimizer.zero_grad()
-                x_hat, mu, logvar = model(data_dic['images'], data_dic['fake_labels'])
-                vae_loss = loss_fn(data_dic['images'], x_hat, mu, logvar)
-                cfr = classifier(x_hat)
-                closs = bce_fn(cfr, data_dic['fake_labels'])
-                loss = vae_loss + args.lambda_c * closs
+                x_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
+                z_prior, mu_prior, logvar_prior = prior(data_dic['labels'])
+                vae_loss = loss_fn(data_dic['images'], x_hat, mu, logvar, mu_prior, logvar_prior)
+                # cfr = classifier(x_hat)
+                # closs = bce_fn(cfr, data_dic['labels'])
+                # loss = vae_loss + args.lambda_c * closs
+                loss = vae_loss
                 loss.backward()
                 optimizer.step()
                 loss_dic['cvae_loss'].append(loss.data.item())
@@ -202,8 +215,8 @@ if __name__ == '__main__':
                     plot(data_dic['images'].detach().cpu().numpy()[:10], x_hat.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, epoch, index)
                     
                     original_x = torch.cat([data_dic['images'][:1]] * 10, dim=0)
-                    fake_x_labels = data_dic['fake_labels'][:10]
-                    fake_x, _, _ = model(original_x, fake_x_labels)
+                    fake_x_labels = data_dic['fake_labels'][:9]
+                    fake_x, _, _ = model(original_x, torch.cat([data_dic['labels'][:1], fake_x_labels], axis=0))
                     plot(original_x.detach().cpu().numpy(), fake_x.detach().cpu().numpy(), args.model, model_dir, args.expID + '_fake', epoch, index)
                     
                     model.train()

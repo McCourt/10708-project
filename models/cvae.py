@@ -20,13 +20,12 @@ class ResidualBlock(nn.Module):
         return x + self.main(x)
 
 class GeneratorModel(nn.Module):
-    def __init__(self, device, hidden_size=60, feature_size=40):
+    def __init__(self, hidden_size=60, feature_size=40):
         super(GeneratorModel, self).__init__()
-        self.device = device
         self.hidden_size = hidden_size
         self.feature_size = feature_size
         total_size = self.hidden_size + self.feature_size
-        self.encoder = nn.Sequential(
+        self.encoder1 = nn.Sequential(
             ResidualBlock(in_channels=3, out_channels=16),
             nn.MaxPool2d(kernel_size=2), # batch x 16 x 32 x 32
             ResidualBlock(in_channels=16, out_channels=32),
@@ -38,6 +37,14 @@ class GeneratorModel(nn.Module):
             nn.Flatten(), # batch x 120,
             nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=self.hidden_size * 2, out_features=self.hidden_size * 2, bias=True)
+        )
+
+        self.encoder2 = nn.Sequential(
+            nn.Linear(in_features=self.hidden_size * 2 + feature_size, out_features=self.hidden_size * 2 + feature_size, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(in_features=self.hidden_size * 2 + feature_size, out_features=self.hidden_size * 2 + feature_size, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(in_features=self.hidden_size * 2 + feature_size, out_features=self.hidden_size * 2, bias=True)
         )
 
         self.decoder = nn.Sequential(
@@ -66,7 +73,8 @@ class GeneratorModel(nn.Module):
         )
     
     def forward(self, x, labels):
-        encoder_output = self.encoder(x)
+        intermediate = self.encoder1(x)
+        encoder_output = self.encoder2(torch.cat([intermediate, labels], axis=-1))
         mu = encoder_output[..., :self.hidden_size]
         logvar = encoder_output[..., self.hidden_size:]
         sigma = torch.exp(logvar / 2)
@@ -79,7 +87,35 @@ class GeneratorModel(nn.Module):
             x_hat = self.decoder(torch.cat([mu, labels], dim=-1))
 
         return x_hat, mu, logvar
+
+class PriorModel(nn.Module):
+    def __init__(self, hidden_size=60, feature_size=40):
+        super(PriorModel, self).__init__()
+        self.hidden_size = hidden_size
+        self.feature_size = feature_size
+        total_size = self.hidden_size + self.feature_size
+
+        self.encoder = nn.Sequential(
+            nn.Linear(in_features=feature_size, out_features=self.hidden_size * 2, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(in_features=self.hidden_size * 2, out_features=self.hidden_size * 2, bias=True),
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(in_features=self.hidden_size * 2, out_features=self.hidden_size * 2, bias=True)
+        )
     
+    def forward(self, labels):
+        encoder_output = self.encoder(labels)
+        mu = encoder_output[..., :self.hidden_size]
+        logvar = encoder_output[..., self.hidden_size:]
+        sigma = torch.exp(logvar / 2)
+
+        if self.training:
+            eps = torch.randn_like(sigma)
+            sampled_z = mu + eps * sigma
+        else:
+            sampled_z = mu
+
+        return sampled_z, mu, logvar
 
 class ClassifierModel(nn.Module):
     def __init__(self, hidden_size=512, feature_size=40):
