@@ -55,11 +55,11 @@ def gradient_penalty(y, x, device):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
-    parser.add_argument('--expID', type=str, default='0000', help='Name of exp')
+    parser.add_argument('--expID', type=str, default='01', help='Name of exp')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
     parser.add_argument('--batch_size', type=int, default=50, help='Batch Size')
-    parser.add_argument('--learning_rate', type=float, default=5e-4, help='Learning Rate')
-    parser.add_argument('--reg', type=float, default=1, help='weights for reg term in loss')
+    parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning Rate')
+    parser.add_argument('--reg', type=float, default=10, help='weights for reg term in loss')
     parser.add_argument('--gp', type=float, default=10, help='weights for gradient penalty for wgan')
     parser.add_argument('--lambda_c', type=float, default=1., help='weights for classification loss')
     parser.add_argument('--n_critics', type=float, default=5, help='every n_critics we update generator of wgan')
@@ -68,7 +68,7 @@ if __name__ == '__main__':
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
-    # train_data = torch.utils.data.Subset(train_data, [i for i in range(100)])
+    # train_data = torch.utils.data.Subset(train_data, [i for i in range(1000)])
     # test_data = datasets.CelebA('./data', split='test', download=True, transform=transform_fn)
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, num_workers=4, shuffle=True)
     # test_loader = torch.utils.data.DataLoader(test_data, batch_size=1)
@@ -118,6 +118,17 @@ if __name__ == '__main__':
     elif args.model == 'bvgan':
         # TODO: Add model specification and optimizer of BVGAN
         pass
+    elif args.model == 'ae':
+        model = module.AutoEncoder()
+        try:
+            sd = torch.load('ckpt/ae.pt', map_location='cpu')
+            model.load_state_dict(sd)
+            print('Loading model successful.')
+        except:
+            print('Start new training.')
+        model.to(device)
+        loss_fn = nn.MSELoss()
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 
     pbar = tqdm(total=args.num_epoch * len(train_loader))
     loss_dic = defaultdict(list)
@@ -200,12 +211,25 @@ if __name__ == '__main__':
             elif args.model == 'bvgan':
                 # TODO: Add training loop of BVGAN
                 pass
-            
+
+            elif args.model == 'ae':
+                optimizer.zero_grad()
+                rec = model(data_dic['images'], data_dic['labels'])
+                loss = loss_fn(rec, data_dic['images'])
+                loss.backward()
+                optimizer.step()
+                loss_dic['ae_loss'].append(loss.data.item())
+
+                if index % args.vis_every == 0:
+                    plot(data_dic['images'].detach().cpu().numpy()[:10], rec.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, epoch, index)
+
             pbar.set_description('[{}]'.format(args.model) + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
         if args.model == 'cgan':
             torch.save([generator.state_dict(), discriminator.state_dict(), classifier.state_dict()], 'ckpt/cgan.pt')
         elif args.model == 'cvae':
             torch.save([model.state_dict(), classifier.state_dict()], os.path.join(model_dir, 'ckpt/cvae_{}_{}.pt'.format(args.expID, args.num_epoch * epoch + index)))
+        elif args.model == 'ae':
+            torch.save(model.state_dict(), 'ckpt/ae.pt')
     pbar.close()
     pd.DataFrame.from_dict(loss_dic).to_csv('{}_log.csv'.format(args.model))

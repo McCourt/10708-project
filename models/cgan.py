@@ -62,8 +62,7 @@ class GeneratorModel(nn.Module):
 
             nn.ConvTranspose2d(in_channels=16, out_channels=16, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
-            nn.Conv2d(in_channels=16, out_channels=3, kernel_size=3, padding=1, bias=True),
-            nn.Sigmoid()
+            nn.Conv2d(in_channels=16, out_channels=3, kernel_size=3, padding=1, bias=True)
         )
         self.out = nn.Sigmoid()
     
