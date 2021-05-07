@@ -257,8 +257,8 @@ if __name__ == '__main__':
                     loss_dic['dis_c_loss'] = c_loss.data.item()
 
                 # train generator
-                x_hat_fake, mu_fake, std_fake = generator(data_dic['images'], data_dic['fake_labels'])
-                x_hat_real, mu_real, std_real = generator(data_dic['images'], data_dic['labels'])
+                x_hat_fake, mu_fake, std_fake = generator(data_dic['images'], data_dic['fake_labels'], discriminator)
+                x_hat_real, mu_real, std_real = generator(data_dic['images'], data_dic['labels'], discriminator)
                 d_output_1, c_output_1 = discriminator(x_hat_fake)
                 d_output_2, c_output_2 = discriminator(x_hat_real)
                 d_outputs = torch.cat([d_output_1, d_output_2], dim=0)
