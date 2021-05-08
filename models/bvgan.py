@@ -22,22 +22,20 @@ class ResidualBlock(nn.Module):
 
 
 class GeneratorModel(nn.Module):
-    def __init__(self, hidden_size=512, feature_size=40, z_dim=512):
+    def __init__(self, hidden_size=128, feature_size=40, z_dim=128):
         super(GeneratorModel, self).__init__()
         self.hidden_size = hidden_size
         self.feature_size = feature_size
         self.z_dim = z_dim
         total_size = self.z_dim + self.feature_size
         self.encoder = nn.Sequential(
-            ResidualBlock(in_channels=3, out_channels=64),
+            ResidualBlock(in_channels=3, out_channels=32),
             nn.MaxPool2d(kernel_size=2), # batch x 16 x 32 x 32
-            ResidualBlock(in_channels=64, out_channels=128),
+            ResidualBlock(in_channels=32, out_channels=64),
             nn.MaxPool2d(kernel_size=2), # batch x 32 x 16 x 16
-            ResidualBlock(in_channels=128, out_channels=256),
+            ResidualBlock(in_channels=64, out_channels=64),
             nn.MaxPool2d(kernel_size=2), # batch x 64 x 8 x 8
-            ResidualBlock(in_channels=256, out_channels=256),
-            nn.MaxPool2d(kernel_size=2), # batch x 64 x 8 x 8
-            nn.Conv2d(in_channels=256, out_channels=self.hidden_size, kernel_size=4, padding=0, bias=True),
+            nn.Conv2d(in_channels=64, out_channels=self.hidden_size, kernel_size=8, padding=0, bias=True),
 
             nn.Flatten(), # batch x 60,
             nn.LeakyReLU(inplace=True),
@@ -49,23 +47,23 @@ class GeneratorModel(nn.Module):
             nn.Unflatten(dim=1, unflattened_size=(total_size, 1, 1)),
             nn.ConvTranspose2d(in_channels=total_size, out_channels=128, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=128, out_channels=256), # batch x 64 x 2 x 2
-            nn.ConvTranspose2d(in_channels=256, out_channels=256, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            ResidualBlock(in_channels=128, out_channels=128), # batch x 64 x 2 x 2
+            nn.ConvTranspose2d(in_channels=128, out_channels=64, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=256, out_channels=256), # batch x 64 x 4 x 4
-            nn.ConvTranspose2d(in_channels=256, out_channels=256, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            ResidualBlock(in_channels=64, out_channels=64), # batch x 64 x 4 x 4
+            nn.ConvTranspose2d(in_channels=64, out_channels=64, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=256, out_channels=256), # batch x 64 x 8 x 8
-            nn.ConvTranspose2d(in_channels=256, out_channels=256, stride=2, kernel_size=2, bias=True),
+            ResidualBlock(in_channels=64, out_channels=64), # batch x 64 x 8 x 8
+            nn.ConvTranspose2d(in_channels=64, out_channels=32, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=256, out_channels=128), # batch x 32 x 16 x 16
-            nn.ConvTranspose2d(in_channels=128, out_channels=128, stride=2, kernel_size=2, bias=True),
+            ResidualBlock(in_channels=32, out_channels=32), # batch x 32 x 16 x 16
+            nn.ConvTranspose2d(in_channels=32, out_channels=32, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=128, out_channels=64), # batch x 16 x 32 x 32
+            ResidualBlock(in_channels=32, out_channels=16), # batch x 16 x 32 x 32
 
-            nn.ConvTranspose2d(in_channels=64, out_channels=64, stride=2, kernel_size=2, bias=True),
+            nn.ConvTranspose2d(in_channels=16, out_channels=16, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
-            nn.Conv2d(in_channels=64, out_channels=3, kernel_size=3, padding=1, bias=True),
+            nn.Conv2d(in_channels=16, out_channels=3, kernel_size=3, padding=1, bias=True),
             nn.Tanh()
         )
     
