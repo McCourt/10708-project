@@ -2,6 +2,7 @@ import torch
 from torchvision import transforms, datasets
 import torch.nn as nn
 from torch import optim as optim
+import numpy as np
 
 
 class ResidualBlock(nn.Module):
@@ -68,7 +69,7 @@ class GeneratorModel(nn.Module):
             nn.Tanh()
         )
     
-    def forward(self, x, labels, discriminator):
+    def forward(self, x, labels, discriminator=None):
         encoder_output = self.encoder(x)
         mu = encoder_output[..., :self.z_dim]
         log_std = encoder_output[..., self.z_dim:].clamp(-4, 15)
@@ -76,24 +77,31 @@ class GeneratorModel(nn.Module):
         
         if self.training:
             sampled_z = mu + torch.randn_like(std) * std
-            control_vec = torch.randn(self.control_vec_dim)
+            control_vec = torch.from_numpy(np.random.randn(std.shape[0], self.control_vec_dim).astype(np.float32))
+            control_vec = control_vec.to(std.device)
             x_hat = self.decoder(torch.cat([sampled_z, labels, control_vec], dim=-1))
         else:
-            x_hat = self.choose_best(mu, labels, discriminator)
+            x_hat = self.optimize_control_vec(mu, labels, discriminator)
 
         return (x_hat + 1) / 2, mu, std
     
-    def choose_best(mu, labels, discriminator):
-        best_x_hat = None
-        best_d_output = 0
-        for _ in range(10):
-            control_vec = torch.randn(self.control_vec_dim)
-            x_hat = self.decoder(torch.cat([mu, labels, control_vec], dim=-1))
+    def optimize_control_vec(self, mu, labels, discriminator):
+        all_x_hat = []
+        all_d_output = []
+        n_trials = 10
+        control_vec = torch.from_numpy(np.random.randn(n_trials, mu.shape[0], self.control_vec_dim).astype(np.float32))
+        control_vec = control_vec.to(mu.device)
+        for _ in range(n_trials):
+            x_hat = self.decoder(torch.cat([mu, labels, control_vec[_]], dim=-1))
+            x_hat = (x_hat + 1) / 2
             d_output, _ = discriminator(x_hat.detach())
-            if d_output > best_d_output:
-                best_x_hat = x_hat
-                best_d_output = d_output
-        return best_x_hat
+            all_x_hat.append(x_hat)
+            all_d_output.append(d_output.detach().cpu().numpy())
+        best_x_hat = []
+        best_indices = np.argmax(np.array(all_d_output)[..., 0], axis=0)
+        for i in range(n_trials):
+            best_x_hat.append(all_x_hat[i][best_indices[i]])
+        return torch.stack(best_x_hat)
 
 
 class DiscriminatorModel(nn.Module):

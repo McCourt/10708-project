@@ -73,7 +73,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
     parser.add_argument('--expID', type=str, default='0000', help='Name of exp')
     parser.add_argument('--num_epoch', type=int, default=100, help='Number of Epochs')
-    parser.add_argument('--batch_size', type=int, default=100, help='Batch Size')
+    parser.add_argument('--batch_size', type=int, default=128, help='Batch Size')
     parser.add_argument('--learning_rate', type=float, default=1e-3, help='Learning Rate')
     parser.add_argument('--g_lr', type=float, default=1e-3, help='Generator Learning Rate')
     parser.add_argument('--d_lr', type=float, default=1e-4, help='Discriminator Learning Rate')
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     wandb.init(project='bvgan', entity='s21_10708_team2', config=vars(args),
-               name=f'exp{args.expID}')
+               name=f'exp_{args.expID}')
 
     transform_fn = transforms.Compose([transforms.ToTensor(), transforms.CenterCrop(178), transforms.Resize(64)])
     train_data = datasets.CelebA('./data', split='train', download=True, transform=transform_fn)
@@ -264,7 +264,8 @@ if __name__ == '__main__':
                 d_outputs = torch.cat([d_output_1, d_output_2], dim=0)
                 vae_loss = (kl_loss_fn(mu_fake, std_fake) + kl_loss_fn(mu_real, std_real)) / 2
                 d_loss = -torch.log(d_outputs).mean()
-                c_loss = (loss_fn(c_output_1, data_dic['fake_labels']) + loss_fn(c_output_2, data_dic['labels'])) / 2
+                c_loss = loss_fn(c_output_1[np.arange(args.batch_size), edit_indices], data_dic['fake_labels'][np.arange(args.batch_size), edit_indices]) / 2
+                c_loss += loss_fn(c_output_2[np.arange(args.batch_size), edit_indices], data_dic['labels'][np.arange(args.batch_size), edit_indices]) / 2
                 rec_loss = torch.mean((x_hat_real - data_dic['images']) ** 2)
                 g_total_loss = args.lambda_d * d_loss + args.lambda_c * c_loss + args.reg * rec_loss + args.lambda_kl * vae_loss
 
@@ -281,10 +282,12 @@ if __name__ == '__main__':
 
                 if index % args.vis_every == 0:
                     generator.eval()
+                    vis_x_hat_fake, _, _ = generator(data_dic['images'], data_dic['fake_labels'], discriminator)
+                    vis_x_hat_real, _, _ = generator(data_dic['images'], data_dic['labels'], discriminator)
                     num_samples = 10
                     gt_samples = data_dic['images'].detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
-                    rec_samples = x_hat_real.detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
-                    edit_samples = x_hat_fake.detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
+                    rec_samples = vis_x_hat_real.detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
+                    edit_samples = vis_x_hat_fake.detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
                     for i in range(num_samples):
                         edit_sample = (edit_samples[i] * 255).copy().astype(np.uint8)
                         annotated_img = cv2.putText(edit_sample,
