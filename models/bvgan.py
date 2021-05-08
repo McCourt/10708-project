@@ -75,15 +75,22 @@ class GeneratorModel(nn.Module):
         log_std = encoder_output[..., self.z_dim:].clamp(-4, 15)
         std = torch.exp(log_std)
         
+        n_samples = 10
+        x_hats = []
         if self.training:
             sampled_z = mu + torch.randn_like(std) * std
             control_vec = torch.from_numpy(np.random.randn(std.shape[0], self.control_vec_dim).astype(np.float32))
             control_vec = control_vec.to(std.device)
             x_hat = self.decoder(torch.cat([sampled_z, labels, control_vec], dim=-1))
+            for _ in range(n_samples):
+                control_vec_i = torch.from_numpy(np.random.randn(std.shape[0], self.control_vec_dim).astype(np.float32))
+                control_vec_i = control_vec_i.to(std.device)
+                x_hat_i = self.decoder(torch.cat([sampled_z, labels, control_vec_i], dim=-1))
+                x_hats.append(x_hat_i)
         else:
             x_hat = self.optimize_control_vec(mu, labels, discriminator)
 
-        return (x_hat + 1) / 2, mu, std
+        return (x_hat + 1) / 2, mu, std, torch.stack(x_hats)
     
     def optimize_control_vec(self, mu, labels, discriminator):
         all_x_hat = []

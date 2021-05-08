@@ -275,7 +275,7 @@ if __name__ == '__main__':
 
                 # train discriminator
                 if index % args.n_critics == 0:
-                    g, _, _ = generator(data_dic['images'], data_dic['fake_labels'])
+                    g, _, _, _ = generator(data_dic['images'], data_dic['fake_labels'])
                     d_real_output, c_real_output = discriminator(data_dic['images'])
                     d_fake_output, c_fake_output = discriminator(g)
 
@@ -293,8 +293,8 @@ if __name__ == '__main__':
 
                 # train generator
                 batch_size = data_dic['images'].shape[0]
-                x_hat_fake, mu_fake, std_fake = generator(data_dic['images'], data_dic['fake_labels'], discriminator)
-                x_hat_real, mu_real, std_real = generator(data_dic['images'], data_dic['labels'], discriminator)
+                x_hat_fake, mu_fake, std_fake, x_hats_fake = generator(data_dic['images'], data_dic['fake_labels'], discriminator)
+                x_hat_real, mu_real, std_real, x_hats_real = generator(data_dic['images'], data_dic['labels'], discriminator)
                 d_output_1, c_output_1 = discriminator(x_hat_fake)
                 d_output_2, c_output_2 = discriminator(x_hat_real)
                 d_outputs = torch.cat([d_output_1, d_output_2], dim=0)
@@ -305,7 +305,7 @@ if __name__ == '__main__':
                 c_loss += loss_fn(c_output_2[np.arange(batch_size), edit_indices],
                                   data_dic['labels'][np.arange(batch_size), edit_indices]) / 2
                 rec_loss = torch.mean((x_hat_real - data_dic['images']) ** 2)
-                ent_loss = (ent_loss_fn(pretrained_encoder.encode(x_hat_fake)) + ent_loss_fn(pretrained_encoder.encode(x_hat_real))) / 2
+                ent_loss = (ent_loss_fn(pretrained_encoder.encode(x_hats_fake)).sum() + ent_loss_fn(pretrained_encoder.encode(x_hats_real)).sum()) / 2
                 g_total_loss = args.lambda_d * d_loss + args.lambda_c * c_loss + args.reg * rec_loss + args.lambda_kl * vae_loss + args.lambda_ent * ent_loss
 
                 g_optim.zero_grad()
@@ -321,8 +321,8 @@ if __name__ == '__main__':
 
                 if index % args.vis_every == 0:
                     generator.eval()
-                    vis_x_hat_fake, _, _ = generator(data_dic['images'], data_dic['fake_labels'], discriminator)
-                    vis_x_hat_real, _, _ = generator(data_dic['images'], data_dic['labels'], discriminator)
+                    vis_x_hat_fake, _, _, _ = generator(data_dic['images'], data_dic['fake_labels'], discriminator)
+                    vis_x_hat_real, _, _, _ = generator(data_dic['images'], data_dic['labels'], discriminator)
                     num_samples = 10
                     gt_samples = data_dic['images'].detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
                     rec_samples = vis_x_hat_real.detach().cpu().numpy()[:num_samples].transpose(0, 2, 3, 1)
