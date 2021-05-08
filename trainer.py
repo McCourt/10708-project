@@ -257,6 +257,7 @@ if __name__ == '__main__':
                     loss_dic['dis_c_loss'] = c_loss.data.item()
 
                 # train generator
+                batch_size = data_dic['images'].shape[0]
                 x_hat_fake, mu_fake, std_fake = generator(data_dic['images'], data_dic['fake_labels'], discriminator)
                 x_hat_real, mu_real, std_real = generator(data_dic['images'], data_dic['labels'], discriminator)
                 d_output_1, c_output_1 = discriminator(x_hat_fake)
@@ -264,8 +265,10 @@ if __name__ == '__main__':
                 d_outputs = torch.cat([d_output_1, d_output_2], dim=0)
                 vae_loss = (kl_loss_fn(mu_fake, std_fake) + kl_loss_fn(mu_real, std_real)) / 2
                 d_loss = -torch.log(d_outputs).mean()
-                c_loss = loss_fn(c_output_1[np.arange(args.batch_size), edit_indices], data_dic['fake_labels'][np.arange(args.batch_size), edit_indices]) / 2
-                c_loss += loss_fn(c_output_2[np.arange(args.batch_size), edit_indices], data_dic['labels'][np.arange(args.batch_size), edit_indices]) / 2
+                c_loss = loss_fn(c_output_1[np.arange(batch_size), edit_indices],
+                                 data_dic['fake_labels'][np.arange(batch_size), edit_indices]) / 2
+                c_loss += loss_fn(c_output_2[np.arange(batch_size), edit_indices],
+                                  data_dic['labels'][np.arange(batch_size), edit_indices]) / 2
                 rec_loss = torch.mean((x_hat_real - data_dic['images']) ** 2)
                 g_total_loss = args.lambda_d * d_loss + args.lambda_c * c_loss + args.reg * rec_loss + args.lambda_kl * vae_loss
 
