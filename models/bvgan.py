@@ -22,12 +22,13 @@ class ResidualBlock(nn.Module):
 
 
 class GeneratorModel(nn.Module):
-    def __init__(self, hidden_size=128, feature_size=40, z_dim=128):
+    def __init__(self, hidden_size=128, feature_size=40, z_dim=128, control_vec_dim=10):
         super(GeneratorModel, self).__init__()
         self.hidden_size = hidden_size
         self.feature_size = feature_size
         self.z_dim = z_dim
-        total_size = self.z_dim + self.feature_size
+        self.control_vec_dim = control_vec_dim
+        total_size = self.z_dim + self.feature_size + self.control_vec_dim
         self.encoder = nn.Sequential(
             ResidualBlock(in_channels=3, out_channels=32),
             nn.MaxPool2d(kernel_size=2), # batch x 16 x 32 x 32
@@ -67,7 +68,7 @@ class GeneratorModel(nn.Module):
             nn.Tanh()
         )
     
-    def forward(self, x, labels):
+    def forward(self, x, labels, discriminator):
         encoder_output = self.encoder(x)
         mu = encoder_output[..., :self.z_dim]
         log_std = encoder_output[..., self.z_dim:].clamp(-4, 15)
@@ -75,12 +76,25 @@ class GeneratorModel(nn.Module):
         
         if self.training:
             sampled_z = mu + torch.randn_like(std) * std
-            x_hat = self.decoder(torch.cat([sampled_z, labels], dim=-1))
+            control_vec = torch.randn(self.control_vec_dim)
+            x_hat = self.decoder(torch.cat([sampled_z, labels, control_vec], dim=-1))
         else:
-            x_hat = self.decoder(torch.cat([mu, labels], dim=-1))
+            x_hat = self.choose_best(mu, labels, discriminator)
 
         return (x_hat + 1) / 2, mu, std
     
+    def choose_best(mu, labels, discriminator):
+        best_x_hat = None
+        best_d_output = 0
+        for _ in range(10):
+            control_vec = torch.randn(self.control_vec_dim)
+            x_hat = self.decoder(torch.cat([mu, labels, control_vec], dim=-1))
+            d_output, _ = discriminator(x_hat.detach())
+            if d_output > best_d_output:
+                best_x_hat = x_hat
+                best_d_output = d_output
+        return best_x_hat
+
 
 class DiscriminatorModel(nn.Module):
     def __init__(self, hidden_size=512, feature_size=40):
