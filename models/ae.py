@@ -83,5 +83,5 @@ class AutoEncoder(nn.Module):
         f = torch.cat([self.encoder(x), labels], dim=-1)
         return self.out(self.decoder(f))
     
-    def forward_encoder(self, x):
+    def encode(self, x):
         return self.encoder(x)

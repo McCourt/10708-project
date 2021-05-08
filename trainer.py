@@ -68,6 +68,38 @@ def gradient_penalty(y, x, device):
     return torch.mean((dydx_l2norm-1)**2)
 
 
+def pretrain_encoder(model, train_loader, lr=1e-3, num_epoch=100):
+    print('pretaining encoder for BV-GAN entropy loss')
+    try:
+        sd = torch.load('ckpt/pretrain_ae.pt', map_location='cpu')
+        model.load_state_dict(sd)
+        print('Loading model successful.')
+    except:
+        print('Start new training.')
+    model.to(device)
+    loss_fn = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    
+    pbar = tqdm(total=num_epoch * len(train_loader))
+    loss_dic = defaultdict(list)
+    for epoch in range(num_epoch):
+        for index, (imgs, features) in enumerate(train_loader):
+            data_dic = {'images': imgs.to(device), 'labels': features.float().to(device), 'fake_labels': torch.randint(0, 1, features.size()).float().to(device)}
+
+            optimizer.zero_grad()
+            rec = model(data_dic['images'], data_dic['labels'])
+            loss = loss_fn(rec, data_dic['images'])
+            loss.backward()
+            optimizer.step()
+            loss_dic['pretain_ae'].append(loss.data.item())
+
+            pbar.set_description('[{}]'.format('pretrain_ae') + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
+            pbar.update(1)
+        torch.save(model.state_dict(), 'ckpt/pretrain_ae.pt')
+    pbar.close()
+    return model, loss_dic['pretain_ae']
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--model', type=str, default='cgan', help='File Name for Model')
@@ -82,6 +114,7 @@ if __name__ == '__main__':
     parser.add_argument('--lambda_c', type=float, default=0.3, help='weights for classification loss')
     parser.add_argument('--lambda_d', type=float, default=0.3, help='weights for discriminator loss')
     parser.add_argument('--lambda_kl', type=float, default=0.01, help='weights for vae')
+    parser.add_argument('--lambda_ent', type=float, default=0.01, help='weights for entropy loss')
     parser.add_argument('--n_critics', type=float, default=5, help='every n_critics we update generator of wgan')
     parser.add_argument('--vis_every', type=int, default=50, help='every vis_every we visualize the training results')
     args = parser.parse_args()
@@ -141,8 +174,10 @@ if __name__ == '__main__':
         generator.to(device)
         loss_fn = nn.BCELoss()
         kl_loss_fn = lambda mu, std: -0.5 * (1 + torch.log(std.pow(2)) - mu.pow(2) - std.pow(2)).mean()
+        ent_loss_fn = lambda z: (z * torch.log(z)).sum()
         d_optim = optim.Adam(discriminator.parameters(), lr=args.d_lr)
         g_optim = optim.Adam(generator.parameters(), lr=args.g_lr)
+        pretrained_encoder, pretrain_loss = pretrain_encoder(module.AutoEncoder(), train_loader)
 
     pbar = tqdm(total=args.num_epoch * len(train_loader))
     loss_dic = defaultdict(list)
@@ -267,7 +302,8 @@ if __name__ == '__main__':
                 c_loss = loss_fn(c_output_1[np.arange(args.batch_size), edit_indices], data_dic['fake_labels'][np.arange(args.batch_size), edit_indices]) / 2
                 c_loss += loss_fn(c_output_2[np.arange(args.batch_size), edit_indices], data_dic['labels'][np.arange(args.batch_size), edit_indices]) / 2
                 rec_loss = torch.mean((x_hat_real - data_dic['images']) ** 2)
-                g_total_loss = args.lambda_d * d_loss + args.lambda_c * c_loss + args.reg * rec_loss + args.lambda_kl * vae_loss
+                ent_loss = (ent_loss_fn(pretrained_encoder.encode(x_hat_fake)) + ent_loss_fn(pretrained_encoder.encode(x_hat_real))) / 2
+                g_total_loss = args.lambda_d * d_loss + args.lambda_c * c_loss + args.reg * rec_loss + args.lambda_kl * vae_loss + args.lambda_ent * ent_loss
 
                 g_optim.zero_grad()
                 g_total_loss.backward()
