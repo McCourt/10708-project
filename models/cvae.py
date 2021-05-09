@@ -28,46 +28,48 @@ class GeneratorModel(nn.Module):
         self.ones = torch.ones([1, 1, 64, 64]).to('cuda')
         
         self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels=3 + self.feature_size, out_channels=32, kernel_size=3, stride=2, padding=1), # 32 * 32 * 32
+            nn.Conv2d(in_channels=3 + self.feature_size, out_channels=32, kernel_size=4, stride=2, padding=1), # 32 * 32 * 32
             nn.BatchNorm2d(32),
-            nn.LeakyReLU(inplace=True), 
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2, padding=1), # 64 * 16 * 16
+            nn.GELU(), 
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2, padding=1), # 64 * 16 * 16
             nn.BatchNorm2d(64),
-            nn.LeakyReLU(inplace=True), 
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=2, padding=1), # 128 * 8 * 8
+            nn.GELU(), 
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=4, stride=2, padding=1), # 128 * 8 * 8
             nn.BatchNorm2d(128),
-            nn.LeakyReLU(inplace=True), 
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, stride=2, padding=1), # 256 * 4 * 4
+            nn.GELU(), 
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=4, stride=2, padding=1), # 256 * 4 * 4
             nn.BatchNorm2d(256),
-            nn.LeakyReLU(inplace=True), 
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=4, padding=0), # 512 * 1 * 1
+            nn.GELU(), 
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=2, padding=1), # 512 * 2 * 2
             nn.BatchNorm2d(512),
+            nn.GELU(),
+            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=4, stride=2, padding=1), # 1024 * 1 * 1
+            nn.BatchNorm2d(1024),
+            nn.GELU(),
             nn.Flatten(),
-            nn.Linear(in_features=512, out_features=self.hidden_size * 2)
+            nn.Linear(in_features=1024, out_features=self.hidden_size * 2)
         )
 
         self.decoder = nn.Sequential(
-            nn.Linear(in_features=self.total_size, out_features=self.total_size, bias=True), # batch x total_size x 1 x 1
-            nn.Unflatten(dim=1, unflattened_size=(self.total_size, 1, 1)),
-            nn.ConvTranspose2d(in_channels=self.total_size, out_channels=self.total_size, stride=2, kernel_size=2, bias=True), # batch x total_size x 8 x 8
-            nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=self.total_size, out_channels=self.total_size), # batch x 64 x 2 x 2
-            nn.ConvTranspose2d(in_channels=self.total_size, out_channels=self.total_size, stride=2, kernel_size=2, bias=True), # batch x total_size x 8 x 8
-            nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=self.total_size, out_channels=self.total_size), # batch x 64 x 4 x 4
-            nn.ConvTranspose2d(in_channels=self.total_size, out_channels=self.total_size, stride=2, kernel_size=2, bias=True), # batch x total_size x 8 x 8
-            nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=self.total_size, out_channels=64), # batch x 64 x 8 x 8
-            nn.ConvTranspose2d(in_channels=64, out_channels=64, stride=2, kernel_size=2, bias=True),
-            nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=64, out_channels=32), # batch x 32 x 16 x 16
-            nn.ConvTranspose2d(in_channels=32, out_channels=32, stride=2, kernel_size=2, bias=True),
-            nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=32, out_channels=16), # batch x 16 x 32 x 32
-
-            nn.ConvTranspose2d(in_channels=16, out_channels=16, stride=2, kernel_size=2, bias=True),
-            nn.LeakyReLU(inplace=True),
-            nn.Conv2d(in_channels=16, out_channels=3, kernel_size=3, padding=1, bias=True),
+            nn.Linear(in_features=self.total_size, out_features=1024), 
+            nn.Unflatten(dim=1, unflattened_size=(1024, 1, 1)), # batch x 1024 x 1 x 1
+            nn.GELU(),
+            nn.ConvTranspose2d(in_channels=1024, out_channels=512, stride=2, kernel_size=4, padding=1), # batch x 512 x 2 x 2
+            nn.BatchNorm2d(512),
+            nn.GELU(),
+            nn.ConvTranspose2d(in_channels=512, out_channels=256, stride=2, kernel_size=4, padding=1), # batch x 256 x 4 x 4
+            nn.BatchNorm2d(256),
+            nn.GELU(),
+            nn.ConvTranspose2d(in_channels=256, out_channels=128, stride=2, kernel_size=4, padding=1), # batch x 128 x 8 x 8
+            nn.BatchNorm2d(128),
+            nn.GELU(),
+            nn.ConvTranspose2d(in_channels=128, out_channels=64, stride=2, kernel_size=4, padding=1), # batch x 64 x 16 x 16
+            nn.BatchNorm2d(64),
+            nn.GELU(),
+            nn.ConvTranspose2d(in_channels=64, out_channels=32, stride=2, kernel_size=4, padding=1), # batch x 32 x 32 x 32
+            nn.BatchNorm2d(32),
+            nn.GELU(),
+            nn.ConvTranspose2d(in_channels=32, out_channels=3, stride=2, kernel_size=4, padding=1), # batch x 3 x 64 x 64
             nn.Sigmoid()
         )
     
