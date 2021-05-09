@@ -84,6 +84,9 @@ if __name__ == '__main__':
             print('[WARNING] exp folder exists!!! overwriting expected!!!')
         else:
             os.makedirs(model_dir)
+        ckpt_path = os.path.join(model_dir, 'ckpt')
+        if not os.path.exists(ckpt_path):
+            os.makedirs(ckpt_path)
 
     if args.model == 'cgan':
         discriminator = module.DiscriminatorModel()
@@ -108,24 +111,16 @@ if __name__ == '__main__':
         coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'cvae':
         model = module.GeneratorModel()
-        classifier = module.ClassifierModel()
-        prior = module.PriorModel()
-
-        try:
-            m, c = torch.load('exp_test_with_true_label/cvae_test_with_true_label_2927.pt', map_location='cpu')
-            model.load_state_dict(m)
-            print('Loading model successful.')
-        except:
-            print('Start new training.')
+        # classifier = module.ClassifierModel()
+        # prior = module.PriorModel()
         
         model.to(device)
-        classifier.to(device)
-        prior.to(device)
+        # classifier.to(device)
+        # prior.to(device)
         bce_fn = nn.BCELoss()
-        loss_fn = lambda x, x_hat, mu, logvar, mu_prior, logvar_prior: \
-            bce_fn(x_hat, x) + args.reg * 0.5 * torch.mean(torch.sum(-1 - logvar + logvar_prior + ((mu - mu_prior).pow(2) + logvar.exp()) / logvar_prior.exp(), dim=1), dim=0)
-        optimizer = optim.Adam(list(model.parameters()) + list(prior.parameters()), lr=args.learning_rate)
-        coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
+        loss_fn = lambda x, x_hat, mu, logvar: bce_fn(x_hat, x) - 0.5 * args.reg * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+        # coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'bvgan':
         # TODO: Add model specification and optimizer of BVGAN
         pass
@@ -200,8 +195,7 @@ if __name__ == '__main__':
 
                 optimizer.zero_grad()
                 x_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
-                z_prior, mu_prior, logvar_prior = prior(data_dic['labels'])
-                vae_loss = loss_fn(data_dic['images'], x_hat, mu, logvar, mu_prior, logvar_prior)
+                vae_loss = loss_fn(data_dic['images'], x_hat, mu, logvar)
                 # cfr = classifier(x_hat)
                 # closs = bce_fn(cfr, data_dic['labels'])
                 # loss = vae_loss + args.lambda_c * closs
@@ -241,7 +235,7 @@ if __name__ == '__main__':
         if args.model == 'cgan':
             torch.save([generator.state_dict(), discriminator.state_dict(), classifier.state_dict()], 'ckpt/cgan.pt')
         elif args.model == 'cvae':
-            torch.save([model.state_dict(), classifier.state_dict()], os.path.join(model_dir, 'ckpt/cvae_{}_{}.pt'.format(args.expID, args.num_epoch * epoch + index)))
+            torch.save([model.state_dict()], os.path.join(model_dir, 'ckpt/cvae_{}_{}.pt'.format(args.expID, args.num_epoch * epoch + index)))
         elif args.model == 'ae':
             torch.save(model.state_dict(), 'ckpt/ae.pt')
     pbar.close()

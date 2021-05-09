@@ -20,45 +20,44 @@ class ResidualBlock(nn.Module):
         return x + self.main(x)
 
 class GeneratorModel(nn.Module):
-    def __init__(self, hidden_size=60, feature_size=40):
+    def __init__(self, hidden_size=128, feature_size=40):
         super(GeneratorModel, self).__init__()
         self.hidden_size = hidden_size
         self.feature_size = feature_size
-        total_size = self.hidden_size + self.feature_size
-        self.encoder1 = nn.Sequential(
-            ResidualBlock(in_channels=3, out_channels=16),
-            nn.MaxPool2d(kernel_size=2), # batch x 16 x 32 x 32
-            ResidualBlock(in_channels=16, out_channels=32),
-            nn.MaxPool2d(kernel_size=2), # batch x 32 x 16 x 16
-            ResidualBlock(in_channels=32, out_channels=64),
-            nn.MaxPool2d(kernel_size=2), # batch x 64 x 8 x 8
-            nn.Conv2d(in_channels=64, out_channels=self.hidden_size * 2, kernel_size=8, padding=0, bias=True),
-
-            nn.Flatten(), # batch x 120,
-            nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=self.hidden_size * 2, out_features=self.hidden_size * 2, bias=True)
-        )
-
-        self.encoder2 = nn.Sequential(
-            nn.Linear(in_features=self.hidden_size * 2 + feature_size, out_features=self.hidden_size * 2 + feature_size, bias=True),
-            nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=self.hidden_size * 2 + feature_size, out_features=self.hidden_size * 2 + feature_size, bias=True),
-            nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=self.hidden_size * 2 + feature_size, out_features=self.hidden_size * 2, bias=True)
+        self.total_size = self.hidden_size + self.feature_size
+        self.ones = torch.ones([1, 1, 64, 64]).to('cuda')
+        
+        self.encoder = nn.Sequential(
+            nn.Conv2d(in_channels=3 + self.feature_size, out_channels=32, kernel_size=3, stride=2, padding=1), # 32 * 32 * 32
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(inplace=True), 
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2, padding=1), # 64 * 16 * 16
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(inplace=True), 
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=2, padding=1), # 128 * 8 * 8
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(inplace=True), 
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, stride=2, padding=1), # 256 * 4 * 4
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(inplace=True), 
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=4, padding=0), # 512 * 1 * 1
+            nn.BatchNorm2d(512),
+            nn.Flatten(),
+            nn.Linear(in_features=512, out_features=self.hidden_size * 2)
         )
 
         self.decoder = nn.Sequential(
-            nn.Linear(in_features=total_size, out_features=total_size, bias=True), # batch x 100 x 1 x 1
-            nn.Unflatten(dim=1, unflattened_size=(total_size, 1, 1)),
-            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            nn.Linear(in_features=self.total_size, out_features=self.total_size, bias=True), # batch x total_size x 1 x 1
+            nn.Unflatten(dim=1, unflattened_size=(self.total_size, 1, 1)),
+            nn.ConvTranspose2d(in_channels=self.total_size, out_channels=self.total_size, stride=2, kernel_size=2, bias=True), # batch x total_size x 8 x 8
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=total_size, out_channels=total_size), # batch x 64 x 2 x 2
-            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            ResidualBlock(in_channels=self.total_size, out_channels=self.total_size), # batch x 64 x 2 x 2
+            nn.ConvTranspose2d(in_channels=self.total_size, out_channels=self.total_size, stride=2, kernel_size=2, bias=True), # batch x total_size x 8 x 8
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=total_size, out_channels=total_size), # batch x 64 x 4 x 4
-            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            ResidualBlock(in_channels=self.total_size, out_channels=self.total_size), # batch x 64 x 4 x 4
+            nn.ConvTranspose2d(in_channels=self.total_size, out_channels=self.total_size, stride=2, kernel_size=2, bias=True), # batch x total_size x 8 x 8
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=total_size, out_channels=64), # batch x 64 x 8 x 8
+            ResidualBlock(in_channels=self.total_size, out_channels=64), # batch x 64 x 8 x 8
             nn.ConvTranspose2d(in_channels=64, out_channels=64, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
             ResidualBlock(in_channels=64, out_channels=32), # batch x 32 x 16 x 16
@@ -73,8 +72,9 @@ class GeneratorModel(nn.Module):
         )
     
     def forward(self, x, labels):
-        intermediate = self.encoder1(x)
-        encoder_output = self.encoder2(torch.cat([intermediate, labels], axis=-1))
+        labels_map = self.ones * labels.unsqueeze(-1).unsqueeze(-1)
+        encoder_input = torch.cat([x, labels_map], dim=1)
+        encoder_output = self.encoder(encoder_input)
         mu = encoder_output[..., :self.hidden_size]
         logvar = encoder_output[..., self.hidden_size:]
         sigma = torch.exp(logvar / 2)
@@ -93,7 +93,7 @@ class PriorModel(nn.Module):
         super(PriorModel, self).__init__()
         self.hidden_size = hidden_size
         self.feature_size = feature_size
-        total_size = self.hidden_size + self.feature_size
+        self.total_size = self.hidden_size + self.feature_size
 
         self.encoder = nn.Sequential(
             nn.Linear(in_features=feature_size, out_features=self.hidden_size * 2, bias=True),
