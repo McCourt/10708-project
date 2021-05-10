@@ -111,16 +111,17 @@ if __name__ == '__main__':
         coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'cvae':
         model = module.GeneratorModel()
-        # classifier = module.ClassifierModel()
+        classifier = module.ClassifierModel()
         # prior = module.PriorModel()
         
         model.to(device)
-        # classifier.to(device)
+        classifier.to(device)
         # prior.to(device)
+
         bce_fn = nn.BCELoss()
         loss_fn = lambda x, x_hat, mu, logvar: bce_fn(x_hat, x) - 0.5 * args.reg * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
         optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
-        # coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
+        coptimizer = optim.Adam(classifier.parameters(), lr=args.learning_rate)
     elif args.model == 'bvgan':
         # TODO: Add model specification and optimizer of BVGAN
         pass
@@ -186,20 +187,20 @@ if __name__ == '__main__':
                 if index % args.vis_every == 0:
                     plot(data_dic['images'].detach().cpu().numpy()[:10], g.detach().cpu().numpy()[:10], args.model, model_dir, args.expID, epoch, index)
             elif args.model == 'cvae':
-                # coptimizer.zero_grad()
-                # cfr = classifier(data_dic['images'])
-                # closs = bce_fn(cfr, data_dic['labels'])
-                # closs.backward()
-                # coptimizer.step()
-                # loss_dic['closs'].append(closs.data.item())
+                coptimizer.zero_grad()
+                cfr = classifier(data_dic['images'])
+                closs = bce_fn(cfr, data_dic['labels'])
+                closs.backward()
+                coptimizer.step()
+                loss_dic['closs'].append(closs.data.item())
 
                 optimizer.zero_grad()
                 x_hat, mu, logvar = model(data_dic['images'], data_dic['labels'])
                 vae_loss = loss_fn(data_dic['images'], x_hat, mu, logvar)
-                # cfr = classifier(x_hat)
-                # closs = bce_fn(cfr, data_dic['labels'])
-                # loss = vae_loss + args.lambda_c * closs
-                loss = vae_loss
+                cfr = classifier(x_hat)
+                closs = bce_fn(cfr, data_dic['labels'])
+                loss = vae_loss + args.lambda_c * closs
+                # loss = vae_loss
                 loss.backward()
                 optimizer.step()
                 loss_dic['cvae_loss'].append(loss.data.item())

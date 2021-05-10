@@ -120,11 +120,11 @@ class PriorModel(nn.Module):
         return sampled_z, mu, logvar
 
 class ClassifierModel(nn.Module):
-    def __init__(self, hidden_size=512, feature_size=40):
+    def __init__(self, hidden_size=128, feature_size=40):
         super(ClassifierModel, self).__init__()
         self.hidden_size = hidden_size
         self.feature_size = feature_size
-        self.D = nn.Sequential(
+        self.classifier = nn.Sequential(
             ResidualBlock(in_channels=3, out_channels=16),
             ResidualBlock(in_channels=16, out_channels=16),
             nn.MaxPool2d(kernel_size=2), # batch x 16 x 32 x 32
@@ -141,20 +141,15 @@ class ClassifierModel(nn.Module):
             ResidualBlock(in_channels=64, out_channels=64),
             nn.MaxPool2d(kernel_size=2), # batch x 64 x 4 x 4
 
-            nn.Conv2d(in_channels=64, out_channels=self.hidden_size, kernel_size=4, bias=True),
-            nn.Flatten(), # batch x 60,
-        )
-
-        self.l2 = nn.Sequential(
-            nn.Linear(in_features=self.hidden_size, out_features=2 * self.hidden_size, bias=True),
+            nn.Conv2d(in_channels=64, out_channels=2 * self.feature_size, kernel_size=4, bias=True),
+            nn.Flatten(), 
             nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=2 * self.hidden_size, out_features=self.feature_size, bias=True),
+            nn.Linear(in_features=2 * self.feature_size, out_features=self.feature_size, bias=True),
             nn.Sigmoid()
         )
     
     def forward(self, x):
-        f = self.D(x)
-        return self.l2(f)
+        return self.classifier(x)
 
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
