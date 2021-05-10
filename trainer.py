@@ -180,7 +180,7 @@ if __name__ == '__main__':
         loss_fn = nn.BCELoss()
         kl_loss_fn = lambda mu, std: -0.5 * (1 + torch.log(std.pow(2)) - mu.pow(2) - std.pow(2)).mean()
         norm = Normal(torch.tensor(0.0), torch.tensor(1.0))
-        ent_loss_fn = lambda z: -torch.var(z)
+        ent_loss_fn = lambda z: -torch.log(torch.var(z))
         d_optim = optim.Adam(discriminator.parameters(), lr=args.d_lr)
         g_optim = optim.Adam(generator.parameters(), lr=args.g_lr)
         pretrained_encoder, pretrain_loss = pretrain_encoder(module.AutoEncoder(), train_loader)
