@@ -180,7 +180,7 @@ if __name__ == '__main__':
         loss_fn = nn.BCELoss()
         kl_loss_fn = lambda mu, std: -0.5 * (1 + torch.log(std.pow(2)) - mu.pow(2) - std.pow(2)).mean()
         norm = Normal(torch.tensor(0.0), torch.tensor(1.0))
-        ent_loss_fn = lambda z: torch.exp(norm.log_prob(z)) * norm.log_prob(z)
+        ent_loss_fn = lambda z: -torch.var(z)
         d_optim = optim.Adam(discriminator.parameters(), lr=args.d_lr)
         g_optim = optim.Adam(generator.parameters(), lr=args.g_lr)
         pretrained_encoder, pretrain_loss = pretrain_encoder(module.AutoEncoder(), train_loader)
@@ -315,10 +315,8 @@ if __name__ == '__main__':
                                   data_dic['labels'][np.arange(batch_size), edit_indices]) / 2
                 rec_loss = torch.mean((x_hat_real - data_dic['images']) ** 2)
                 z_fake = pretrained_encoder.encoder(x_hats_fake)
-                normed_z_fake = (z_fake - z_fake.min()) / (z_fake.max()-z_fake.min())
                 z_real = pretrained_encoder.encoder(x_hats_real)
-                normed_z_real = (z_real - z_real.min()) / (z_real.max()-z_real.min())
-                ent_loss = (ent_loss_fn(normed_z_fake).sum() + ent_loss_fn(normed_z_real).sum()) / 2
+                ent_loss = (ent_loss_fn(z_fake).sum() + ent_loss_fn(z_real).sum()) / 2
                 g_total_loss = args.lambda_d * d_loss + args.lambda_c * c_loss + args.reg * rec_loss + args.lambda_kl * vae_loss + args.lambda_ent * ent_loss
 
                 g_optim.zero_grad()
