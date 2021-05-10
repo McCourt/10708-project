@@ -23,7 +23,8 @@ torch.cuda.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
 
-
+# use 'Black_Hair', 'Blond_Hair', 'Brown_Hair', 'Male', 'Young'
+# 8, 9, 11, 20, 39
 attr_names = [
     '5_o_Clock_Shadow', 'Arched_Eyebrows', 'Attractive',
     'Bags_Under_Eyes', 'Bald', 'Bangs', 'Big_Lips', 'Big_Nose',
@@ -36,6 +37,7 @@ attr_names = [
     'Wearing_Earrings', 'Wearing_Hat', 'Wearing_Lipstick',
     'Wearing_Necklace', 'Wearing_Necktie', 'Young'
 ]
+attr_selector = [8, 9, 11, 20, 39]
 
 
 def plot(imgs, rec_imgs, model, model_dir, expID=None, epoch=None, idx=None):
@@ -84,6 +86,7 @@ def pretrain_encoder(model, train_loader, lr=1e-3, num_epoch=100):
     loss_dic = defaultdict(list)
     for epoch in range(num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
+            features = features[:, attr_selector]
             data_dic = {'images': imgs.to(device), 'labels': features.float().to(device), 'fake_labels': torch.randint(0, 1, features.size()).float().to(device)}
 
             optimizer.zero_grad()
@@ -95,6 +98,7 @@ def pretrain_encoder(model, train_loader, lr=1e-3, num_epoch=100):
 
             pbar.set_description('[{}]'.format('pretrain_ae') + ''.join(['[{}:{:.4e}]'.format(k, np.mean(v[-1000:])) for k, v in loss_dic.items()]))
             pbar.update(1)
+            return model, loss_dic['pretain_ae']
         torch.save(model.state_dict(), 'ckpt/pretrain_ae.pt')
     pbar.close()
     return model, loss_dic['pretain_ae']
@@ -184,6 +188,8 @@ if __name__ == '__main__':
     step = 0
     for epoch in range(args.num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
+            if args.model == 'bvgan':
+                features = features[:, attr_selector]
             edit_indices = np.random.randint(0, features.shape[-1], size=features.shape[0])
             fake_labels = features.detach().cpu().numpy()
             fake_labels[np.arange(features.shape[0]), edit_indices] = 1 - fake_labels[np.arange(features.shape[0]), edit_indices]

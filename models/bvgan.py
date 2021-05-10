@@ -23,7 +23,7 @@ class ResidualBlock(nn.Module):
 
 
 class GeneratorModel(nn.Module):
-    def __init__(self, hidden_size=128, feature_size=40, z_dim=128, control_vec_dim=10):
+    def __init__(self, hidden_size=128, feature_size=5, z_dim=128, control_vec_dim=10):
         super(GeneratorModel, self).__init__()
         self.hidden_size = hidden_size
         self.feature_size = feature_size
@@ -114,7 +114,7 @@ class GeneratorModel(nn.Module):
 
 
 class DiscriminatorModel(nn.Module):
-    def __init__(self, hidden_size=512, feature_size=40):
+    def __init__(self, hidden_size=512, feature_size=5):
         super(DiscriminatorModel, self).__init__()
         self.hidden_size = hidden_size
         self.feature_size = feature_size
@@ -176,7 +176,7 @@ class ResidualBlock(nn.Module):
 
 
 class AutoEncoder(nn.Module):
-    def __init__(self, hidden_size=960, feature_size=40):
+    def __init__(self, hidden_size=960, feature_size=5):
         super(AutoEncoder, self).__init__()
         self.hidden_size = hidden_size
         self.feature_size = feature_size
