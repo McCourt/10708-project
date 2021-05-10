@@ -316,7 +316,8 @@ if __name__ == '__main__':
                     'gen_d_loss': d_loss.data.item(),
                     'gen_c_loss': c_loss.data.item(),
                     'gen_kl_loss': vae_loss.data.item(),
-                    'gen_rec_loss': rec_loss.data.item()
+                    'gen_rec_loss': rec_loss.data.item(),
+                    'gen_ent_loss': ent_loss.data.item()
                 })
 
                 if index % args.vis_every == 0:
