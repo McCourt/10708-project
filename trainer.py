@@ -113,6 +113,13 @@ if __name__ == '__main__':
         model = module.GeneratorModel()
         classifier = module.ClassifierModel()
         # prior = module.PriorModel()
+
+        try:
+            m = torch.load('exp_cvae_0006_reg0.01_c0.1/ckpt/cvae_cvae_0006_reg0.01_c0.1_9755.pt', map_location='cpu')[0]
+            model.load_state_dict(m)
+            print('Loading model successful.')
+        except:
+            print('Start new training.')
         
         model.to(device)
         classifier.to(device)
@@ -141,7 +148,7 @@ if __name__ == '__main__':
     loss_dic = defaultdict(list)
     for epoch in range(args.num_epoch):
         for index, (imgs, features) in enumerate(train_loader):
-            data_dic = {'images': imgs.to(device), 'labels': features.float().to(device), 'fake_labels': torch.randint(0, 1, features.size()).float().to(device)}
+            data_dic = {'images': imgs.to(device), 'labels': features.float().to(device), 'fake_labels': torch.randint(0, 2, features.size()).float().to(device)}
             if args.model == 'cgan':
                 doptimizer.zero_grad()
                 coptimizer.zero_grad()
@@ -190,8 +197,8 @@ if __name__ == '__main__':
                 coptimizer.zero_grad()
                 cfr = classifier(data_dic['images'])
                 closs = bce_fn(cfr, data_dic['labels'])
-                closs.backward()
-                coptimizer.step()
+                # closs.backward()
+                # coptimizer.step()
                 loss_dic['closs'].append(closs.data.item())
 
                 optimizer.zero_grad()
@@ -201,8 +208,8 @@ if __name__ == '__main__':
                 closs = bce_fn(cfr, data_dic['labels'])
                 loss = vae_loss + args.lambda_c * closs
                 # loss = vae_loss
-                loss.backward()
-                optimizer.step()
+                # loss.backward()
+                # optimizer.step()
                 loss_dic['cvae_loss'].append(loss.data.item())
                 
                 if index % args.vis_every == 0:
@@ -236,7 +243,7 @@ if __name__ == '__main__':
         if args.model == 'cgan':
             torch.save([generator.state_dict(), discriminator.state_dict(), classifier.state_dict()], 'ckpt/cgan.pt')
         elif args.model == 'cvae':
-            torch.save([model.state_dict()], os.path.join(model_dir, 'ckpt/cvae_{}_{}.pt'.format(args.expID, args.num_epoch * epoch + index)))
+            torch.save([model.state_dict()], os.path.join(model_dir, 'ckpt/{}_{}.pt'.format(args.expID, epoch)))
         elif args.model == 'ae':
             torch.save(model.state_dict(), 'ckpt/ae.pt')
     pbar.close()
