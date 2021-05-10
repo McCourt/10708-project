@@ -119,7 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--lambda_c', type=float, default=0.3, help='weights for classification loss')
     parser.add_argument('--lambda_d', type=float, default=0.3, help='weights for discriminator loss')
     parser.add_argument('--lambda_kl', type=float, default=0.01, help='weights for vae')
-    parser.add_argument('--lambda_ent', type=float, default=0.01, help='weights for entropy loss')
+    parser.add_argument('--lambda_ent', type=float, default=0.1, help='weights for entropy loss')
     parser.add_argument('--n_critics', type=float, default=5, help='every n_critics we update generator of wgan')
     parser.add_argument('--vis_every', type=int, default=50, help='every vis_every we visualize the training results')
     args = parser.parse_args()
