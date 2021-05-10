@@ -184,6 +184,7 @@ if __name__ == '__main__':
         d_optim = optim.Adam(discriminator.parameters(), lr=args.d_lr)
         g_optim = optim.Adam(generator.parameters(), lr=args.g_lr)
         pretrained_encoder, pretrain_loss = pretrain_encoder(module.AutoEncoder(), train_loader)
+        pretrained_encoder.to(device)
         print('pretrain finished')
 
     pbar = tqdm(total=args.num_epoch * len(train_loader))
