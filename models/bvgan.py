@@ -197,7 +197,8 @@ class AutoEncoder(nn.Module):
             nn.LeakyReLU(inplace=True),
             nn.Linear(in_features=self.hidden_size, out_features=self.hidden_size * 2, bias=True),
             nn.LeakyReLU(inplace=True),
-            nn.Linear(in_features=self.hidden_size* 2, out_features=self.hidden_size, bias=True)
+            nn.Linear(in_features=self.hidden_size* 2, out_features=self.hidden_size, bias=True),
+            nn.Tanh()
         )
 
         self.decoder = nn.Sequential(

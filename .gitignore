@@ -10,3 +10,4 @@ models/__pycache__
 *.csv
 /ckpt/
 wandb/
+exp*/
