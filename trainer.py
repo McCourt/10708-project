@@ -16,6 +16,8 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 import wandb
 
+torch.autograd.set_detect_anomaly(True)
+
 seed = 1
 os.environ['PYTHONHASHSEED'] = str(seed)
 np.random.seed(seed)
@@ -54,6 +56,14 @@ def plot(imgs, rec_imgs, model, model_dir, expID=None, epoch=None, idx=None):
     else:
         plt.savefig(os.path.join(model_dir, 'vis_{}_{}_{}_{}.png'.format(model, expID, epoch, idx)))
     plt.close()
+
+
+def add_loss(dic, name, value, weight):
+    dic.update({
+        f'{name}': value,
+        f'scaled/{name}': value * weight    
+    })
+    return dic
 
 
 def gradient_penalty(y, x, device):
@@ -116,10 +126,10 @@ if __name__ == '__main__':
     parser.add_argument('--d_lr', type=float, default=1e-4, help='Discriminator Learning Rate')
     parser.add_argument('--reg', type=float, default=1, help='weights for reg term in loss')
     parser.add_argument('--gp', type=float, default=10, help='weights for gradient penalty for wgan')
-    parser.add_argument('--lambda_c', type=float, default=0.3, help='weights for classification loss')
-    parser.add_argument('--lambda_d', type=float, default=0.3, help='weights for discriminator loss')
+    parser.add_argument('--lambda_c', type=float, default=0.03, help='weights for classification loss')
+    parser.add_argument('--lambda_d', type=float, default=0.01, help='weights for discriminator loss')
     parser.add_argument('--lambda_kl', type=float, default=0.01, help='weights for vae')
-    parser.add_argument('--lambda_ent', type=float, default=0.1, help='weights for entropy loss')
+    parser.add_argument('--lambda_ent', type=float, default=1, help='weights for entropy loss')
     parser.add_argument('--n_critics', type=float, default=5, help='every n_critics we update generator of wgan')
     parser.add_argument('--vis_every', type=int, default=50, help='every vis_every we visualize the training results')
     args = parser.parse_args()
@@ -205,7 +215,6 @@ if __name__ == '__main__':
             if args.model == 'cgan':
                 doptimizer.zero_grad()
                 g = generator(data_dic['images'], data_dic['fake_labels'])
-                import pdb; pdb.set_trace()
                 dr, cfr = discriminator(data_dic['images'])
                 df, _ = discriminator(g)
 
@@ -298,8 +307,8 @@ if __name__ == '__main__':
                     d_total_loss.backward()
                     d_optim.step()
 
-                    loss_dic['dis_d_loss'] = (d_loss_real + d_loss_fake).data.item()
-                    loss_dic['dis_c_loss'] = c_loss.data.item()
+                    loss_dic = add_loss(loss_dic, 'dis_d_loss', (d_loss_real + d_loss_fake).data.item(), args.lambda_d)
+                    loss_dic = add_loss(loss_dic, 'dis_c_loss', c_loss.data.item(), args.lambda_c)
 
                 # train generator
                 batch_size = data_dic['images'].shape[0]
@@ -324,13 +333,11 @@ if __name__ == '__main__':
                 g_total_loss.backward()
                 g_optim.step()
 
-                loss_dic.update({
-                    'gen_d_loss': d_loss.data.item(),
-                    'gen_c_loss': c_loss.data.item(),
-                    'gen_kl_loss': vae_loss.data.item(),
-                    'gen_rec_loss': rec_loss.data.item(),
-                    'gen_ent_loss': ent_loss.data.item()
-                })
+                loss_dic = add_loss(loss_dic, 'gen_d_loss', d_loss.data.item(), args.lambda_d)
+                loss_dic = add_loss(loss_dic, 'gen_c_loss', c_loss.data.item(), args.lambda_c)
+                loss_dic = add_loss(loss_dic, 'gen_kl_loss', vae_loss.data.item(), args.lambda_kl)
+                loss_dic = add_loss(loss_dic, 'gen_rec_loss', rec_loss.data.item(), args.reg)
+                loss_dic = add_loss(loss_dic, 'gen_ent_loss', ent_loss.data.item(), args.lambda_ent)
 
                 if index % args.vis_every == 0:
                     generator.eval()
@@ -343,7 +350,7 @@ if __name__ == '__main__':
                     for i in range(num_samples):
                         edit_sample = (edit_samples[i] * 255).copy().astype(np.uint8)
                         annotated_img = cv2.putText(edit_sample,
-                                                    attr_names[edit_indices[i]],
+                                                    attr_names[attr_selector[edit_indices[i]]],
                                                     (10, 10), cv2.FONT_HERSHEY_SIMPLEX, 0.3,
                                                     (255, 255, 255), 1,
                                                     cv2.LINE_AA)

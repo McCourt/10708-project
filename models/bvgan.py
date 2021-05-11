@@ -31,11 +31,11 @@ class GeneratorModel(nn.Module):
         self.control_vec_dim = control_vec_dim
         total_size = self.z_dim + self.feature_size + self.control_vec_dim
         self.encoder = nn.Sequential(
-            ResidualBlock(in_channels=3, out_channels=32),
+            ResidualBlock(in_channels=3, out_channels=16),
             nn.MaxPool2d(kernel_size=2), # batch x 16 x 32 x 32
-            ResidualBlock(in_channels=32, out_channels=64),
+            ResidualBlock(in_channels=16, out_channels=32),
             nn.MaxPool2d(kernel_size=2), # batch x 32 x 16 x 16
-            ResidualBlock(in_channels=64, out_channels=64),
+            ResidualBlock(in_channels=32, out_channels=64),
             nn.MaxPool2d(kernel_size=2), # batch x 64 x 8 x 8
             nn.Conv2d(in_channels=64, out_channels=self.hidden_size, kernel_size=8, padding=0, bias=True),
 
@@ -47,18 +47,18 @@ class GeneratorModel(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(in_features=total_size, out_features=total_size, bias=True), # batch x 100 x 1 x 1
             nn.Unflatten(dim=1, unflattened_size=(total_size, 1, 1)),
-            nn.ConvTranspose2d(in_channels=total_size, out_channels=128, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=128, out_channels=128), # batch x 64 x 2 x 2
-            nn.ConvTranspose2d(in_channels=128, out_channels=64, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            ResidualBlock(in_channels=total_size, out_channels=total_size), # batch x 64 x 2 x 2
+            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=64, out_channels=64), # batch x 64 x 4 x 4
-            nn.ConvTranspose2d(in_channels=64, out_channels=64, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
+            ResidualBlock(in_channels=total_size, out_channels=total_size), # batch x 64 x 4 x 4
+            nn.ConvTranspose2d(in_channels=total_size, out_channels=total_size, stride=2, kernel_size=2, bias=True), # batch x 100 x 8 x 8
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=64, out_channels=64), # batch x 64 x 8 x 8
-            nn.ConvTranspose2d(in_channels=64, out_channels=32, stride=2, kernel_size=2, bias=True),
+            ResidualBlock(in_channels=total_size, out_channels=64), # batch x 64 x 8 x 8
+            nn.ConvTranspose2d(in_channels=64, out_channels=64, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
-            ResidualBlock(in_channels=32, out_channels=32), # batch x 32 x 16 x 16
+            ResidualBlock(in_channels=64, out_channels=32), # batch x 32 x 16 x 16
             nn.ConvTranspose2d(in_channels=32, out_channels=32, stride=2, kernel_size=2, bias=True),
             nn.LeakyReLU(inplace=True),
             ResidualBlock(in_channels=32, out_channels=16), # batch x 16 x 32 x 32
@@ -74,8 +74,8 @@ class GeneratorModel(nn.Module):
         mu = encoder_output[..., :self.z_dim]
         log_std = encoder_output[..., self.z_dim:].clamp(-4, 15)
         std = torch.exp(log_std)
-        
-        n_samples = 10
+
+        n_samples = 2
         x_hats = []
         if self.training:
             sampled_z = mu + torch.randn_like(std) * std
